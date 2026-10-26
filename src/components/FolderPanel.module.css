@@ -1,0 +1,34 @@
+.panel { position: fixed; z-index: 32; top: 70px; right: 12px; bottom: 76px; width: min(460px, calc(100vw - 24px)); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg); overflow: hidden; }
+.panel header { padding: 10px 12px 8px; border-bottom: 1px solid var(--border); }
+.crumbs { display: flex; flex-wrap: wrap; gap: 2px; font-size: 12px; }
+.crumbs button, .path button { background: transparent; border: 0; color: var(--muted); cursor: pointer; padding: 2px 4px; border-radius: 5px; }
+.crumbs button:hover, .path button:hover { background: var(--hover); }
+.titleRow { display: flex; align-items: center; gap: 8px; }
+.titleRow input { flex: 1; min-width: 0; font-size: 17px; font-weight: 650; border: 0; background: transparent; padding: 4px 6px; border-radius: 8px; }
+.titleRow input:hover, .titleRow input:focus { background: var(--hover); outline: none; }
+.colors { display: flex; gap: 3px; }
+.colors button { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border); padding: 0; cursor: pointer; }
+.colors .colorOn { box-shadow: 0 0 0 2px var(--accent); }
+.close { background: transparent; border: 0; cursor: pointer; border-radius: 8px; width: 30px; height: 30px; display: grid; place-items: center; }
+.close:hover { background: var(--hover); }
+.body { flex: 1; overflow: auto; padding: 10px 12px 14px; }
+.body.over { outline: 3px dashed var(--accent); outline-offset: -6px; background: var(--accent-soft); }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.actions button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); cursor: pointer; }
+.actions button:hover:not(:disabled) { background: var(--hover); }
+.actions button:disabled { opacity: 0.4; }
+.path { flex: 1; display: flex; flex-wrap: wrap; min-width: 0; }
+.path button { border: 0; padding: 2px 4px; display: inline; }
+.hint { color: var(--muted); margin: 8px 0; line-height: 1.4; }
+.error { color: var(--danger); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.child { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); min-width: 0; }
+.thumb, .folderBtn, .noteText { height: 82px; border-radius: 8px; display: grid; place-items: center; overflow: hidden; background: var(--hover); border: 0; color: #1c2026; cursor: pointer; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.noteText { place-items: start; padding: 6px 8px; font-size: 11.5px; line-height: 1.3; color: #1f2328; overflow: hidden; cursor: default; }
+.childName { font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.childSub { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.childActions { position: absolute; top: 12px; right: 12px; display: flex; gap: 2px; opacity: 0; transition: opacity 0.1s; }
+.child:hover .childActions, .child:focus-within .childActions { opacity: 1; }
+.childActions button, .childActions a { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); cursor: pointer; color: var(--text); }
+.childActions button:hover, .childActions a:hover { background: var(--hover); }

@@ -1,0 +1,59 @@
+.host {
+  position: absolute; inset: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--dot) 1.2px, transparent 1.3px);
+  background-size: calc(24px * var(--z)) calc(24px * var(--z));
+  background-position: var(--ox) var(--oy);
+}
+.host.noGrid { background-image: none; }
+.grab { cursor: grab; }
+.crosshair { cursor: crosshair; }
+.place { cursor: copy; }
+.world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+
+.selBox {
+  position: absolute; left: 0; top: 0; pointer-events: none; transform-origin: 50% 50%;
+  outline: calc(1.5px / var(--z)) solid var(--accent); outline-offset: calc(1px / var(--z));
+}
+.groupBox {
+  position: absolute; left: 0; top: 0; pointer-events: none;
+  outline: calc(1.5px / var(--z)) dashed var(--accent); outline-offset: calc(6px / var(--z));
+}
+.handle {
+  position: absolute; pointer-events: auto; background: var(--panel);
+  width: calc(11px / var(--z)); height: calc(11px / var(--z));
+  margin: calc(-5.5px / var(--z)) 0 0 calc(-5.5px / var(--z));
+  border: calc(1.5px / var(--z)) solid var(--accent); border-radius: calc(3px / var(--z));
+}
+.rotStem { position: absolute; left: 50%; top: calc(-26px / var(--z)); height: calc(26px / var(--z)); width: 0; border-left: calc(1.5px / var(--z)) solid var(--accent); }
+.rotHandle {
+  position: absolute; left: 50%; top: calc(-34px / var(--z)); pointer-events: auto; cursor: grab; background: var(--panel);
+  width: calc(14px / var(--z)); height: calc(14px / var(--z)); margin-left: calc(-7px / var(--z));
+  border: calc(1.5px / var(--z)) solid var(--accent); border-radius: 50%;
+}
+.marquee { position: absolute; pointer-events: none; background: color-mix(in srgb, var(--accent) 12%, transparent); border: calc(1px / var(--z)) solid var(--accent); }
+
+.draftSvg { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+
+.cursor { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; transition: opacity 0.2s; z-index: 5; }
+.cursorInner { transform: scale(calc(1 / var(--z))); transform-origin: 0 0; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35)); }
+.cursorLabel { display: inline-block; margin: 0 0 0 14px; transform: translateY(-6px); padding: 1px 7px; border-radius: 999px; color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+.contextBar {
+  position: absolute; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); z-index: 20;
+}
+.contextBar button { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+.contextBar button:hover { background: var(--hover); }
+.contextBar .danger:hover { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+.swatch { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border); padding: 0; cursor: pointer; margin: 0 2px; flex: none; }
+.contextBar .swatch { width: 20px; height: 20px; }
+.rainbow { background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red); position: relative; overflow: hidden; }
+.rainbow input { position: absolute; inset: -6px; opacity: 0; cursor: pointer; width: 40px; height: 40px; }
+.sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+
+.empty {
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); text-align: center; color: var(--muted);
+  display: flex; flex-direction: column; gap: 6px; pointer-events: none; font-size: 14px; max-width: 80vw;
+}
+.empty b { font-size: 18px; color: var(--text); }

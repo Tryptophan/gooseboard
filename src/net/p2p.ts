@@ -1,0 +1,578 @@
+import type { WebrtcProvider } from 'y-webrtc'
+import { FRAME_SIZE, HIGH_WATER, LOW_WATER } from '../config'
+import { mimeOf } from '../lib/files'
+import type { Profile } from '../lib/storage'
+import type { LocalSources } from './sources'
+import { makeThumb } from './thumbs'
+import type { TransferStore } from './transfers'
+
+/**
+ * Side channel for file bytes, riding on the same WebRTC data channels y-webrtc already
+ * opened between every pair of peers (full mesh). y-webrtc's own messages start with a
+ * varuint type 0..4, so frames beginning with MAGIC are ours; we intercept them before
+ * y-webrtc sees them. Bytes are read from the owner's disk on demand: never stored in the doc.
+ */
+const MAGIC = 0x67
+const K_JSON = 1
+const K_DATA = 2
+const DATA_HEADER = 14 // magic, kind, u32 request id, f64 offset
+const PAYLOAD = FRAME_SIZE - DATA_HEADER
+const BLOCK = 256 * 1024
+const enc = new TextEncoder()
+const dec = new TextDecoder()
+
+export type Op = 'file' | 'thumb' | 'list'
+
+export interface GetReq {
+  op: Op
+  /** a single shared file, or a path inside a linked directory */
+  kind: 'file' | 'dir'
+  key: string
+  path?: string
+  from?: number
+}
+
+export interface Meta {
+  name: string
+  size: number
+  mime: string
+}
+
+type Wire =
+  | { t: 'hello'; user: string; name: string }
+  | { t: 'get'; id: number; req: GetReq }
+  | { t: 'meta'; id: number; meta: Meta }
+  | { t: 'end'; id: number }
+  | { t: 'err'; id: number; code: 'notfound' | 'failed'; msg?: string }
+  | { t: 'wait'; id: number; reason: 'relink' }
+  | { t: 'cancel'; id: number }
+
+interface Link {
+  peerId: string
+  conn: any
+  userId?: string
+  name?: string
+}
+
+interface Resolved extends Meta {
+  read(a: number, b: number): Promise<ArrayBuffer>
+}
+
+export type ReqState = 'connecting' | 'active' | 'waiting-owner' | 'waiting-relink'
+
+export interface Handlers {
+  onMeta?(m: Meta): void
+  onData?(offset: number, bytes: Uint8Array): void | Promise<void>
+  onState?(s: ReqState): void
+}
+
+export interface ReqHandle {
+  done: Promise<Meta | undefined>
+  cancel(): void
+}
+
+interface ActiveReq {
+  id: number
+  ownerId: string
+  req: GetReq
+  h: Handlers
+  received: number
+  meta?: Meta
+  chain: Promise<void>
+  settled: boolean
+  link?: Link
+  local: boolean
+  startedAt: number
+  patienceMs: number
+  resolve(m: Meta | undefined): void
+  reject(e: Error): void
+}
+
+export interface PendingRelink {
+  key: string
+  kind: 'file' | 'dir'
+  name: string
+  askedBy: string[]
+}
+
+type Listener = () => void
+
+export const encodeJSON = (msg: Wire): Uint8Array => {
+  const body = enc.encode(JSON.stringify(msg))
+  const out = new Uint8Array(body.length + 2)
+  out[0] = MAGIC
+  out[1] = K_JSON
+  out.set(body, 2)
+  return out
+}
+
+export const encodeData = (id: number, offset: number, bytes: Uint8Array): Uint8Array => {
+  const out = new Uint8Array(DATA_HEADER + bytes.length)
+  const dv = new DataView(out.buffer)
+  out[0] = MAGIC
+  out[1] = K_DATA
+  dv.setUint32(2, id)
+  dv.setFloat64(6, offset)
+  out.set(bytes, DATA_HEADER)
+  return out
+}
+
+export const decodeData = (buf: Uint8Array) => {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+  return { id: dv.getUint32(2), offset: dv.getFloat64(6), bytes: buf.subarray(DATA_HEADER) }
+}
+
+export class P2P {
+  private links = new Map<string, Link>()
+  private reqs = new Map<number, ActiveReq>()
+  private serving = new Map<string, { cancelled: boolean }>()
+  private waiting: { link: Link; id: number; req: GetReq }[] = []
+  private pending = new Map<string, PendingRelink>()
+  private thumbCache = new Map<string, Blob | null>()
+  private nextId = (Math.random() * 2 ** 30) | 0
+  private timer: ReturnType<typeof setInterval>
+  private version = 0
+  private listeners = new Set<Listener>()
+  private pendingSnap: PendingRelink[] = []
+
+  constructor(
+    private provider: WebrtcProvider,
+    private self: Profile,
+    readonly sources: LocalSources,
+    readonly transfers: TransferStore,
+    /** name/kind of an item this person shares, so relink prompts can say what is being asked for */
+    private lookup: (key: string) => { name: string; kind: 'file' | 'dir' } | undefined,
+  ) {
+    this.timer = setInterval(this.tick, 500)
+    // y-webrtc creates its room asynchronously. Hook the connection map the moment it exists so we
+    // intercept our frames from a connection's very first message (a poll alone would race).
+    void Promise.resolve((provider as any).key).then(() => this.hookRoom())
+    this.tick()
+  }
+
+  private hooked = false
+  private hookRoom() {
+    const map: Map<string, any> | undefined = (this.provider as any).room?.webrtcConns
+    if (!map || this.hooked) return
+    this.hooked = true
+    const set = map.set.bind(map)
+    map.set = (peerId: string, conn: any) => {
+      set(peerId, conn)
+      this.linkConn(peerId, conn)
+      return map
+    }
+    map.forEach((conn, peerId) => this.linkConn(peerId, conn))
+  }
+
+  private linkConn(peerId: string, conn: any) {
+    const cur = this.links.get(peerId)
+    if (cur && cur.conn === conn) return
+    const link: Link = { peerId, conn }
+    this.links.set(peerId, link)
+    this.attach(link)
+    this.emit()
+  }
+
+  // ---- observable state ----
+  subscribe = (l: Listener) => {
+    this.listeners.add(l)
+    return () => this.listeners.delete(l)
+  }
+  getVersion = () => this.version
+  private emit() {
+    this.version++
+    this.pendingSnap = [...this.pending.values()]
+    this.listeners.forEach((l) => l())
+  }
+  getPending = () => this.pendingSnap
+
+  /** Users we hold a live data channel to. */
+  reachableUsers(): Set<string> {
+    const s = new Set<string>()
+    this.links.forEach((l) => l.userId && l.conn.connected && s.add(l.userId))
+    return s
+  }
+
+  get peerCount() {
+    return [...this.links.values()].filter((l) => l.conn.connected).length
+  }
+
+  destroy() {
+    clearInterval(this.timer)
+    this.reqs.forEach((ar) => this.fail(ar, new Error('closed')))
+    this.listeners.clear()
+  }
+
+  // ---- link management ----
+  private tick = () => {
+    const room = (this.provider as any).room
+    const conns: Map<string, any> | undefined = room?.webrtcConns
+    let changed = false
+    if (conns) {
+      this.hookRoom()
+      for (const [peerId, conn] of conns) {
+        if (this.links.get(peerId)?.conn !== conn) {
+          this.linkConn(peerId, conn)
+          changed = true
+        }
+      }
+    }
+    for (const [peerId, l] of [...this.links]) {
+      if (!conns?.has(peerId) || l.conn.closed) {
+        this.links.delete(peerId)
+        this.linkDown(l)
+        changed = true
+      }
+    }
+    const now = Date.now()
+    for (const ar of [...this.reqs.values()]) {
+      if (ar.settled || ar.local) continue
+      if (ar.link && (!ar.link.conn.connected || ar.link.conn.closed)) {
+        ar.link = undefined
+        ar.h.onState?.('waiting-owner')
+      }
+      if (!ar.link) {
+        const l = this.linkFor(ar.ownerId)
+        if (l) void this.kick(ar)
+        else if (now - ar.startedAt > ar.patienceMs && ar.received === 0) this.fail(ar, new Error('unreachable'))
+      }
+    }
+    if (changed) this.emit()
+  }
+
+  private attach(link: Link) {
+    const peer = link.conn.peer
+    const orig = peer.emit
+    peer.emit = (ev: string, ...args: any[]) => {
+      if (ev === 'data') {
+        const d = args[0]
+        if (d && d.length > 1 && d[0] === MAGIC) {
+          this.onFrame(link, d instanceof Uint8Array ? d : new Uint8Array(d))
+          return true
+        }
+      }
+      return orig.call(peer, ev, ...args)
+    }
+    const hello = () => void this.sendFrame(link, encodeJSON({ t: 'hello', user: this.self.id, name: this.self.name })).catch(() => {})
+    if (link.conn.connected) hello()
+    else peer.once('connect', hello)
+  }
+
+  private linkFor(userId: string): Link | undefined {
+    for (const l of this.links.values()) if (l.userId === userId && l.conn.connected && !l.conn.closed) return l
+    return undefined
+  }
+
+  private linkDown(l: Link) {
+    for (const [k, st] of this.serving) if (k.startsWith(l.peerId + ':')) st.cancelled = true
+    this.waiting = this.waiting.filter((w) => w.link !== l)
+  }
+
+  private async sendFrame(link: Link, frame: Uint8Array) {
+    const peer = link.conn.peer
+    const ch: RTCDataChannel | undefined = peer?._channel
+    if (!link.conn.connected || link.conn.closed || !ch || ch.readyState !== 'open') throw new Error('link closed')
+    if (ch.bufferedAmount > HIGH_WATER) await this.drain(ch)
+    peer.send(frame)
+  }
+
+  private drain(ch: RTCDataChannel) {
+    return new Promise<void>((resolve, reject) => {
+      ch.bufferedAmountLowThreshold = LOW_WATER
+      const cleanup = () => {
+        clearInterval(iv)
+        ch.removeEventListener('bufferedamountlow', onLow)
+      }
+      const onLow = () => {
+        cleanup()
+        resolve()
+      }
+      const iv = setInterval(() => {
+        if (ch.readyState !== 'open') {
+          cleanup()
+          reject(new Error('link closed'))
+        } else if (ch.bufferedAmount <= LOW_WATER) onLow()
+      }, 100)
+      ch.addEventListener('bufferedamountlow', onLow)
+    })
+  }
+
+  // ---- incoming ----
+  private onFrame(link: Link, buf: Uint8Array) {
+    try {
+      if (buf[1] === K_JSON) this.onMessage(link, JSON.parse(dec.decode(buf.subarray(2))) as Wire)
+      else if (buf[1] === K_DATA) {
+        const { id, offset, bytes } = decodeData(buf)
+        this.onData(link, id, offset, bytes)
+      }
+    } catch (e) {
+      console.warn('[gooseboard] bad frame', e)
+    }
+  }
+
+  private onMessage(link: Link, msg: Wire) {
+    switch (msg.t) {
+      case 'hello':
+        link.userId = msg.user
+        link.name = msg.name
+        this.emit()
+        break
+      case 'get':
+        void this.serve(link, msg.id, msg.req)
+        break
+      case 'cancel':
+        {
+          const st = this.serving.get(`${link.peerId}:${msg.id}`)
+          if (st) st.cancelled = true
+          this.waiting = this.waiting.filter((w) => !(w.link === link && w.id === msg.id))
+        }
+        break
+      case 'meta':
+      case 'end':
+      case 'err':
+      case 'wait': {
+        const ar = this.reqs.get(msg.id)
+        if (!ar || ar.link !== link) return
+        if (msg.t === 'meta') {
+          ar.meta = msg.meta
+          ar.h.onMeta?.(msg.meta)
+          ar.h.onState?.('active')
+        } else if (msg.t === 'wait') ar.h.onState?.('waiting-relink')
+        else if (msg.t === 'err') this.fail(ar, new Error(msg.code === 'notfound' ? 'not found' : (msg.msg ?? 'failed')))
+        else void ar.chain.then(() => this.finish(ar))
+        break
+      }
+    }
+  }
+
+  private onData(link: Link, id: number, offset: number, bytes: Uint8Array) {
+    const ar = this.reqs.get(id)
+    if (!ar || ar.link !== link || ar.settled) return
+    if (offset !== ar.received) return // duplicate or gap after a resume: owner restarts from `from`
+    ar.received += bytes.length
+    ar.chain = ar.chain.then(() => ar.h.onData?.(offset, bytes)).catch((e) => this.fail(ar, e))
+  }
+
+  // ---- requesting (this peer wants bytes from `ownerId`) ----
+  request(ownerId: string, req: GetReq, h: Handlers, opts: { patienceMs?: number } = {}): ReqHandle {
+    const id = this.nextId++ >>> 0
+    let resolve!: (m: Meta | undefined) => void
+    let reject!: (e: Error) => void
+    const done = new Promise<Meta | undefined>((a, b) => {
+      resolve = a
+      reject = b
+    })
+    const ar: ActiveReq = {
+      id,
+      ownerId,
+      req,
+      h,
+      received: req.from ?? 0,
+      chain: Promise.resolve(),
+      settled: false,
+      local: ownerId === this.self.id,
+      startedAt: Date.now(),
+      patienceMs: opts.patienceMs ?? (req.op === 'file' ? Infinity : 15000),
+      resolve,
+      reject,
+    }
+    this.reqs.set(id, ar)
+    void this.kick(ar)
+    done.catch(() => {})
+    return { done, cancel: () => this.cancelReq(ar) }
+  }
+
+  private async kick(ar: ActiveReq) {
+    if (ar.settled) return
+    if (ar.local) return this.runLocal(ar)
+    const link = this.linkFor(ar.ownerId)
+    if (!link) {
+      ar.h.onState?.('waiting-owner')
+      return
+    }
+    ar.link = link
+    ar.h.onState?.('connecting')
+    try {
+      await this.sendFrame(link, encodeJSON({ t: 'get', id: ar.id, req: { ...ar.req, from: ar.received } }))
+    } catch {
+      ar.link = undefined
+    }
+  }
+
+  private async runLocal(ar: ActiveReq) {
+    try {
+      const r = await this.resolve(ar.req)
+      if (!r || r === 'relink') throw new Error(r ? 'needs relink' : 'not found')
+      ar.meta = { name: r.name, size: r.size, mime: r.mime }
+      ar.h.onMeta?.(ar.meta)
+      ar.h.onState?.('active')
+      const ok = await this.pump(r, ar.received, async (off, bytes) => {
+        ar.received = off + bytes.length
+        await ar.h.onData?.(off, bytes)
+      }, () => ar.settled)
+      if (ok) this.finish(ar)
+    } catch (e) {
+      this.fail(ar, e as Error)
+    }
+  }
+
+  private cancelReq(ar: ActiveReq) {
+    if (ar.settled) return
+    if (ar.link) void this.sendFrame(ar.link, encodeJSON({ t: 'cancel', id: ar.id })).catch(() => {})
+    this.fail(ar, new Error('canceled'))
+  }
+
+  private finish(ar: ActiveReq) {
+    if (ar.settled) return
+    ar.settled = true
+    this.reqs.delete(ar.id)
+    ar.resolve(ar.meta)
+  }
+
+  private fail(ar: ActiveReq, e: Error) {
+    if (ar.settled) return
+    ar.settled = true
+    this.reqs.delete(ar.id)
+    ar.reject(e)
+  }
+
+  // ---- serving (this peer owns the bytes) ----
+  private async resolve(req: GetReq): Promise<Resolved | 'relink' | null> {
+    const miss = () => (this.lookup(req.key) ? ('relink' as const) : null)
+    if (req.kind === 'file') {
+      const f = await this.sources.getFile(req.key)
+      if (!f) return miss()
+      return this.resolveFile(req, f)
+    }
+    const dir = await this.sources.getDir(req.key)
+    if (!dir) return miss()
+    if (req.op === 'list') {
+      const bytes = enc.encode(JSON.stringify(await dir.list(req.path ?? '')))
+      return { name: 'list.json', size: bytes.length, mime: 'application/json', read: async (a, b) => bytes.slice(a, b).buffer as ArrayBuffer }
+    }
+    let f: File
+    try {
+      f = await dir.getFile(req.path ?? '')
+    } catch {
+      return null
+    }
+    return this.resolveFile(req, f)
+  }
+
+  private async resolveFile(req: GetReq, f: File): Promise<Resolved | null> {
+    if (req.op === 'thumb') {
+      const ck = `${req.key}\0${req.path ?? ''}`
+      let t = this.thumbCache.get(ck)
+      if (t === undefined) {
+        t = await makeThumb(f)
+        this.thumbCache.set(ck, t)
+        if (this.thumbCache.size > 300) this.thumbCache.delete(this.thumbCache.keys().next().value!)
+      }
+      if (!t) return null
+      const blob = t
+      return { name: 'thumb.jpg', size: blob.size, mime: 'image/jpeg', read: (a, b) => blob.slice(a, b).arrayBuffer() }
+    }
+    return { name: f.name, size: f.size, mime: mimeOf(f.name, f.type), read: (a, b) => f.slice(a, b).arrayBuffer() }
+  }
+
+  /** Reads `r` in big blocks and hands out frame-sized pieces. Returns false if cancelled. */
+  private async pump(
+    r: Resolved,
+    from: number,
+    send: (offset: number, bytes: Uint8Array) => Promise<void>,
+    cancelled: () => boolean,
+  ): Promise<boolean> {
+    let off = from
+    while (off < r.size) {
+      if (cancelled()) return false
+      const block = new Uint8Array(await r.read(off, Math.min(off + BLOCK, r.size)))
+      if (block.length === 0) throw new Error('short read')
+      for (let p = 0; p < block.length; p += PAYLOAD) {
+        if (cancelled()) return false
+        await send(off + p, block.subarray(p, Math.min(p + PAYLOAD, block.length)))
+      }
+      off += block.length
+    }
+    return true
+  }
+
+  private async serve(link: Link, id: number, req: GetReq) {
+    const skey = `${link.peerId}:${id}`
+    const st = { cancelled: false }
+    this.serving.set(skey, st)
+    const tid = `up:${skey}`
+    let tracked = false
+    let sent = req.from ?? 0
+    const send = (m: Wire) => this.sendFrame(link, encodeJSON(m))
+    try {
+      const r = await this.resolve(req)
+      if (r === 'relink') return void (await this.needRelink(link, id, req, sent))
+      if (!r) return void (await send({ t: 'err', id, code: 'notfound' }))
+      await send({ t: 'meta', id, meta: { name: r.name, size: r.size, mime: r.mime } })
+      if (req.op === 'file') {
+        tracked = true
+        this.transfers.add({
+          id: tid, dir: 'up', name: r.name, size: r.size, done: sent, state: 'active',
+          peerName: link.name ?? 'a peer', startedAt: Date.now(), cancel: () => (st.cancelled = true),
+        })
+      }
+      const ok = await this.pump(
+        r,
+        sent,
+        async (off, bytes) => {
+          await this.sendFrame(link, encodeData(id, off, bytes))
+          sent = off + bytes.length
+          if (tracked) this.transfers.patch(tid, { done: sent })
+        },
+        () => st.cancelled,
+      )
+      if (ok) {
+        await send({ t: 'end', id })
+        if (tracked) this.transfers.patch(tid, { state: 'done', done: r.size })
+      } else if (tracked) this.transfers.patch(tid, { state: 'canceled' })
+    } catch (e) {
+      const name = (e as Error)?.name
+      if ((name === 'NotFoundError' || name === 'NotReadableError') && !st.cancelled) {
+        // file moved/changed since it was shared: ask the owner to relink and resume from `sent`
+        this.sources.forget(req.key)
+        if (tracked) this.transfers.patch(tid, { state: 'waiting-relink' })
+        await this.needRelink(link, id, req, sent).catch(() => {})
+      } else {
+        if (tracked) this.transfers.patch(tid, { state: 'error', error: String((e as Error)?.message ?? e) })
+        await send({ t: 'err', id, code: 'failed', msg: String((e as Error)?.message ?? e) }).catch(() => {})
+      }
+    } finally {
+      this.serving.delete(skey)
+    }
+  }
+
+  private async needRelink(link: Link, id: number, req: GetReq, from: number) {
+    const info = this.lookup(req.key)
+    this.waiting.push({ link, id, req: { ...req, from } })
+    const p = this.pending.get(req.key) ?? { key: req.key, kind: req.kind, name: info?.name ?? 'a shared item', askedBy: [] }
+    const who = link.name ?? 'someone'
+    if (!p.askedBy.includes(who)) p.askedBy.push(who)
+    this.pending.set(req.key, p)
+    this.emit()
+    await this.sendFrame(link, encodeJSON({ t: 'wait', id, reason: 'relink' }))
+  }
+
+  /** Call after the owner re-selected a file/folder: resumes everyone who was waiting. */
+  relinked(key: string) {
+    this.pending.delete(key)
+    const mine = this.waiting.filter((w) => w.req.key === key)
+    this.waiting = this.waiting.filter((w) => w.req.key !== key)
+    mine.forEach((w) => void this.serve(w.link, w.id, w.req))
+    this.emit()
+  }
+
+  dismissPending(key: string) {
+    this.pending.delete(key)
+    this.emit()
+  }
+
+  /** Mark a key's thumbnails stale (e.g. after relinking a different file). */
+  dropThumbs(key: string) {
+    for (const k of [...this.thumbCache.keys()]) if (k.startsWith(key + '\0')) this.thumbCache.delete(k)
+  }
+}

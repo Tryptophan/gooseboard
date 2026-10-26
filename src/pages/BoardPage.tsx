@@ -1,0 +1,102 @@
+import { useEffect, useMemo, useState } from 'react'
+import { Navigate, useParams } from 'react-router-dom'
+import { Canvas } from '../components/Canvas'
+import { FolderPanel } from '../components/FolderPanel'
+import { Icon } from '../components/Icons'
+import { Minimap } from '../components/Minimap'
+import { PreviewProvider } from '../components/Preview'
+import { Toasts } from '../components/Toasts'
+import { Toolbar } from '../components/Toolbar'
+import { TopBar } from '../components/TopBar'
+import { RelinkBanner, TransferPanel } from '../components/TransferPanel'
+import { unionBounds } from '../lib/geometry'
+import { isValidBoardId } from '../lib/ids'
+import { loadCamera, saveCamera, touchBoard } from '../lib/storage'
+import { acquireSession, releaseSession, type Session } from '../net/session'
+import { CameraProvider, useCamera } from '../state/camera'
+import { SessionProvider, useSnapshot } from '../state/session'
+import { useUiDispatch } from '../state/ui'
+import chrome from '../components/Chrome.module.css'
+
+export default function BoardPage() {
+  const { id } = useParams()
+  if (!isValidBoardId(id)) return <Navigate to="/" replace />
+  return <BoardLoader key={id} id={id} />
+}
+
+function BoardLoader({ id }: { id: string }) {
+  const [session, setSession] = useState<Session | null>(null)
+  const [ready, setReady] = useState(false)
+  const dispatch = useUiDispatch()
+
+  useEffect(() => {
+    dispatch({ type: 'reset' })
+    const s = acquireSession(id)
+    touchBoard(id)
+    setSession(s)
+    s.store.onLoaded(() => setReady(true))
+    return () => releaseSession(id)
+  }, [id, dispatch])
+
+  if (!session || !ready) return <div style={{ position: 'fixed', inset: 0, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>Opening board…</div>
+  return (
+    <SessionProvider session={session}>
+      <Board id={id} />
+    </SessionProvider>
+  )
+}
+
+function Board({ id }: { id: string }) {
+  const initial = useMemo(() => loadCamera(id), [id])
+  return (
+    <CameraProvider initial={initial}>
+      <PreviewProvider>
+        <Canvas />
+        <TopBar boardId={id} />
+        <RelinkBanner />
+        <FolderPanel />
+        <Toolbar />
+        <ZoomControls />
+        <TransferPanel />
+        <Minimap />
+        <Toasts />
+        <CameraSaver id={id} />
+      </PreviewProvider>
+    </CameraProvider>
+  )
+}
+
+function CameraSaver({ id }: { id: string }) {
+  const { cam } = useCamera()
+  useEffect(() => {
+    const t = setTimeout(() => saveCamera(id, cam), 400)
+    return () => clearTimeout(t)
+  }, [id, cam])
+  return null
+}
+
+function ZoomControls() {
+  const camApi = useCamera()
+  const snap = useSnapshot()
+  const fit = () => {
+    const b = unionBounds(snap.canvas)
+    if (b) camApi.fitRect(b)
+    else camApi.centerOn(0, 0, 1)
+  }
+  return (
+    <div className={chrome.zoom} data-nodrag>
+      <button title="Zoom out  Ctrl+-" onClick={() => camApi.zoomTo(camApi.cam.z / 1.25)}>
+        <Icon name="minus" size={16} />
+      </button>
+      <button title="Reset to 100%  Ctrl+0" onClick={() => camApi.zoomTo(1)}>
+        {Math.round(camApi.cam.z * 100)}%
+      </button>
+      <button title="Zoom in  Ctrl+=" onClick={() => camApi.zoomTo(camApi.cam.z * 1.25)}>
+        <Icon name="plus" size={16} />
+      </button>
+      <button title="Zoom to fit everything  Shift+1" onClick={fit}>
+        <Icon name="fit" size={16} />
+      </button>
+    </div>
+  )
+}

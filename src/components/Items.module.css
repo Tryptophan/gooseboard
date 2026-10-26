@@ -1,0 +1,52 @@
+.item {
+  position: absolute;
+  left: 0;
+  top: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.item[data-type='stroke'] { pointer-events: none; }
+.strokeSvg { overflow: visible; display: block; pointer-events: none; }
+.strokeSvg path { pointer-events: visiblePainted; cursor: pointer; }
+.selected { z-index: 0; }
+.dropTarget .folder { outline: 3px dashed var(--accent); outline-offset: 6px; border-radius: 14px; }
+
+.card {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: var(--shadow); overflow: hidden;
+}
+.card.link { flex-direction: row; align-items: center; gap: 12px; padding: 0 14px; }
+.thumb { flex: 1; min-height: 0; display: grid; place-items: center; background: var(--hover); position: relative; overflow: hidden; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.play { position: absolute; color: #fff; background: rgba(0, 0, 0, 0.5); width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; padding-left: 3px; }
+.cardInfo { padding: 8px 10px; min-width: 0; flex: 0 0 auto; }
+.link .cardInfo { padding: 0; flex: 1; }
+.cardName { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px; }
+.cardMeta { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cardMeta a { overflow: hidden; text-overflow: ellipsis; }
+.owner { overflow: hidden; text-overflow: ellipsis; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.online, .dot.mine { background: var(--ok); }
+.dot.offline { background: var(--muted); }
+.dot.unlinked { background: var(--warn); }
+.actions { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.12s; }
+.file:hover .actions, .selected .actions { opacity: 1; }
+.actions button {
+  width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--panel); box-shadow: var(--shadow);
+}
+.actions button:hover { background: var(--hover); }
+
+.favicon { width: 36px; height: 36px; border-radius: 10px; background: var(--hover); display: grid; place-items: center; flex: none; overflow: hidden; }
+.favicon img { width: 22px; height: 22px; }
+.linkInput { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); }
+
+.folder { position: absolute; inset: 0; display: flex; flex-direction: column; filter: drop-shadow(0 4px 8px rgba(16, 24, 40, 0.18)); }
+.folderSvg { width: 100%; flex: 1; min-height: 0; }
+.folderInfo { position: absolute; left: 22px; right: 18px; bottom: 16px; color: #1c2026; }
+.folderInfo .cardMeta { color: rgba(28, 32, 38, 0.7); }
+.relink {
+  position: absolute; top: -10px; right: -6px; display: inline-flex; gap: 4px; align-items: center; cursor: pointer;
+  padding: 3px 8px; border-radius: 999px; border: 1px solid var(--warn); background: var(--panel); font-size: 12px; box-shadow: var(--shadow);
+}

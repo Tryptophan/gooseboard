@@ -1,0 +1,46 @@
+.box { position: absolute; inset: 0; border-radius: 4px 4px 4px 14px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 6px 16px rgba(0,0,0,.14); }
+.prose {
+  height: 100%;
+  overflow: auto;
+  padding: 12px 14px;
+  font-size: 15px;
+  line-height: 1.4;
+  color: #1f2328;
+  word-break: break-word;
+  scrollbar-width: thin;
+}
+.prose :global(.empty) { opacity: 0.45; font-style: italic; }
+.prose p { margin: 0 0 0.45em; }
+.prose h1, .prose h2, .prose h3 { margin: 0.1em 0 0.35em; line-height: 1.2; }
+.prose h1 { font-size: 1.5em; } .prose h2 { font-size: 1.3em; } .prose h3 { font-size: 1.12em; }
+.prose ul, .prose ol { margin: 0 0 0.45em; padding-left: 1.3em; }
+.prose ul[data-type='taskList'] { list-style: none; padding-left: 0.2em; }
+.prose li[data-type='taskItem'] { display: flex; gap: 0.5em; align-items: flex-start; }
+.prose li[data-type='taskItem'] > label { margin-top: 0.15em; user-select: none; }
+.prose li[data-type='taskItem'] > div { flex: 1; }
+.prose li[data-type='taskItem'] > div > p { margin: 0; }
+.prose li[data-type='taskItem'][data-checked='true'] > div { text-decoration: line-through; opacity: 0.55; }
+.prose :global(label) input { pointer-events: none; }
+.editing :global(label) input { pointer-events: auto; cursor: pointer; }
+.prose code { background: rgba(0, 0, 0, 0.09); padding: 0.1em 0.3em; border-radius: 4px; font-size: 0.9em; }
+.prose pre { background: rgba(0, 0, 0, 0.1); padding: 8px 10px; border-radius: 8px; overflow: auto; }
+.prose pre code { background: none; padding: 0; }
+.prose blockquote { margin: 0 0 0.45em; padding-left: 0.8em; border-left: 3px solid rgba(0, 0, 0, 0.25); }
+.prose a { color: #1a56db; text-decoration: underline; }
+.editing :global(.ProseMirror) { outline: none; min-height: 100%; cursor: text; }
+.editing :global(.ProseMirror p.is-editor-empty:first-child::before) {
+  content: attr(data-placeholder);
+  float: left; height: 0; pointer-events: none; opacity: 0.4;
+}
+.toolbar {
+  position: absolute; left: 6px; right: 6px; bottom: -40px;
+  display: flex; gap: 2px; padding: 4px; border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow);
+  width: max-content; max-width: none;
+}
+.toolbar button {
+  width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px;
+  color: var(--text); border: 0; background: transparent; cursor: pointer;
+}
+.toolbar button:hover { background: var(--hover); }
+.toolbar button.on { background: var(--accent-soft); color: var(--accent); }
