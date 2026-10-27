@@ -5,6 +5,7 @@ import { addDropItems, pickFiles, readDrop } from '../model/actions'
 import { fragmentToText } from '../model/noteSchema'
 import type { FolderItem, Item } from '../model/types'
 import { FOLDER_COLORS, NOTE_COLORS } from '../model/types'
+import { folderAlias } from '../net/mirror'
 import type { DirEntry } from '../net/sources'
 import { useCamera } from '../state/camera'
 import { usePeers, useSession, useSnapshot } from '../state/session'
@@ -175,12 +176,12 @@ function Child({ item, onOpenFolder, onOut, onDelete }: { item: Item; onOpenFold
       {sub && <div className={s.childSub} title={sub}>{sub}</div>}
       <div className={s.childActions}>
         {item.type === 'file' && canPreview(item.name, item.mime, item.size) && (
-          <button title="Preview" onClick={() => preview({ ownerId: item.owner, ownerName: item.ownerName, req: { op: 'file', kind: 'file', key: item.key }, name: item.name, size: item.size, mime: item.mime })}>
+          <button title="Preview" onClick={() => preview({ ownerId: item.owner, ownerName: item.ownerName, req: { op: 'file', kind: 'file', key: item.key, hash: item.hash }, name: item.name, size: item.size, mime: item.mime })}>
             <Icon name="eye" size={14} />
           </button>
         )}
         {item.type === 'file' && (
-          <button title="Download" onClick={() => void files.download({ ownerId: item.owner, ownerName: item.ownerName, req: { op: 'file', kind: 'file', key: item.key }, name: item.name, size: item.size })}>
+          <button title="Download" onClick={() => void files.download({ ownerId: item.owner, ownerName: item.ownerName, req: { op: 'file', kind: 'file', key: item.key, hash: item.hash }, name: item.name, size: item.size })}>
             <Icon name="download" size={14} />
           </button>
         )}
@@ -240,7 +241,11 @@ function DiskBody({ folder }: { folder: FolderItem }) {
         </button>
       </div>
       <p className={s.hint}>
-        {mine ? 'Served from your disk.' : `Browsing ${folder.ownerName}’s disk live: files are streamed peer-to-peer only when you open or download them.`}
+        {mine
+          ? 'Served from your disk.'
+          : online.has(folder.owner)
+            ? `Browsing ${folder.ownerName}’s disk live: files are streamed peer-to-peer only when you open or download them.`
+            : `${folder.ownerName} is offline: showing the last listing seen. Files open if someone online has a copy.`}
       </p>
       {err ? (
         <p className={s.error}>{err}</p>
@@ -284,7 +289,7 @@ function Entry({ folder, entry, path, onOpen }: { folder: FolderItem; entry: Dir
     }
   }, [wantsThumb, files, folder.owner, folder.key, path])
 
-  const req = { op: 'file', kind: 'dir', key: folder.key ?? '', path } as const
+  const req = { op: 'file', kind: 'dir', key: folder.key ?? '', path, alias: folderAlias(folder.key ?? '', path, entry.size, entry.mtime) } as const
   const args = { ownerId: folder.owner, ownerName: folder.ownerName, req, name: entry.name, size: entry.size, mime: entry.mime }
   const open = useCallback(() => (entry.kind === 'dir' ? onOpen() : canPreview(entry.name, entry.mime, entry.size) ? preview(args) : void files.download(args)), [entry, onOpen, preview, files]) // eslint-disable-line react-hooks/exhaustive-deps
 

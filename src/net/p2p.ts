@@ -2,6 +2,8 @@ import type { WebrtcProvider } from 'y-webrtc'
 import { FRAME_SIZE, HIGH_WATER, LOW_WATER } from '../config'
 import { mimeOf } from '../lib/files'
 import type { Profile } from '../lib/storage'
+import type { Mirror } from './mirror'
+import { fixGlare } from './signal/glare'
 import type { LocalSources } from './sources'
 import { makeThumb } from './thumbs'
 import type { TransferStore } from './transfers'
@@ -11,6 +13,8 @@ import type { TransferStore } from './transfers'
  * opened between every pair of peers (full mesh). y-webrtc's own messages start with a
  * varuint type 0..4, so frames beginning with MAGIC are ours; we intercept them before
  * y-webrtc sees them. Bytes are read from the owner's disk on demand: never stored in the doc.
+ * Peers that hold a copy (see Mirror) advertise its content hash with a `have` message, so a
+ * request carrying `hash` can be served by the owner or any holder, failing over mid-stream.
  */
 const MAGIC = 0x67
 const K_JSON = 1
@@ -30,6 +34,12 @@ export interface GetReq {
   key: string
   path?: string
   from?: number
+  /** content hash: lets holders other than the owner serve it, and the receiver verify it */
+  hash?: string
+  /** requester-side only: folder-file alias (see folderAlias) to record a fetched copy under */
+  alias?: string
+  /** background sync: not shown in the server's transfer list */
+  bg?: boolean
 }
 
 export interface Meta {
@@ -46,16 +56,23 @@ type Wire =
   | { t: 'err'; id: number; code: 'notfound' | 'failed'; msg?: string }
   | { t: 'wait'; id: number; reason: 'relink' }
   | { t: 'cancel'; id: number }
+  | { t: 'have'; hashes: string[]; aliases: Record<string, string> }
 
 interface Link {
   peerId: string
   conn: any
+  /** when the channel opened without a hello yet (see tick) */
+  openedAt?: number
   userId?: string
   name?: string
+  have?: Set<string>
+  aliases?: Record<string, string>
 }
 
 interface Resolved extends Meta {
   read(a: number, b: number): Promise<ArrayBuffer>
+  /** served from a mirrored copy rather than the owner's linked source */
+  mirror?: boolean
 }
 
 export type ReqState = 'connecting' | 'active' | 'waiting-owner' | 'waiting-relink'
@@ -81,6 +98,10 @@ interface ActiveReq {
   chain: Promise<void>
   settled: boolean
   link?: Link
+  /** users that answered notfound/failed: never asked again for this request */
+  bad: Set<string>
+  /** users that answered "wait for relink": only asked again when nobody else can serve */
+  skip: Set<string>
   local: boolean
   startedAt: number
   patienceMs: number
@@ -142,8 +163,11 @@ export class P2P {
     readonly transfers: TransferStore,
     /** name/kind of an item this person shares, so relink prompts can say what is being asked for */
     private lookup: (key: string) => { name: string; kind: 'file' | 'dir' } | undefined,
+    readonly mirror: Mirror,
+    private board: string,
   ) {
     this.timer = setInterval(this.tick, 500)
+    this.unsubMirror = mirror.subscribe(this.advertiseSoon)
     // y-webrtc creates its room asynchronously. Hook the connection map the moment it exists so we
     // intercept our frames from a connection's very first message (a poll alone would race).
     void Promise.resolve((provider as any).key).then(() => this.hookRoom())
@@ -165,6 +189,7 @@ export class P2P {
   }
 
   private linkConn(peerId: string, conn: any) {
+    fixGlare(conn, this.provider)
     const cur = this.links.get(peerId)
     if (cur && cur.conn === conn) return
     const link: Link = { peerId, conn }
@@ -197,8 +222,40 @@ export class P2P {
     return [...this.links.values()].filter((l) => l.conn.connected).length
   }
 
+  /** Reachable users (other than me) advertising a copy of `hash`. */
+  holders(hash: string): string[] {
+    const out = new Set<string>()
+    this.links.forEach((l) => l.userId && l.userId !== this.self.id && l.conn.connected && l.have?.has(hash) && out.add(l.userId))
+    return [...out]
+  }
+
+  /** Content hash a reachable peer (or this browser) recorded for a folder-file alias. */
+  aliasHash(alias: string): string | undefined {
+    const mine = this.mirror.aliasHash(alias)
+    if (mine) return mine
+    for (const l of this.links.values()) if (l.conn.connected && l.aliases?.[alias]) return l.aliases[alias]
+    return undefined
+  }
+
+  // ---- advertising what this browser holds ----
+  private unsubMirror: () => void
+  private haveTimer: ReturnType<typeof setTimeout> | null = null
+  private advertiseSoon = () => {
+    if (this.haveTimer) clearTimeout(this.haveTimer)
+    this.haveTimer = setTimeout(() => {
+      this.haveTimer = null
+      this.links.forEach((l) => this.sendHave(l))
+    }, 300)
+  }
+  private sendHave(link: Link) {
+    const { hashes, aliases } = this.mirror.heldFor(this.board)
+    void this.sendFrame(link, encodeJSON({ t: 'have', hashes, aliases })).catch(() => {})
+  }
+
   destroy() {
     clearInterval(this.timer)
+    if (this.haveTimer) clearTimeout(this.haveTimer)
+    this.unsubMirror()
     this.reqs.forEach((ar) => this.fail(ar, new Error('closed')))
     this.listeners.clear()
   }
@@ -222,6 +279,12 @@ export class P2P {
         this.links.delete(peerId)
         this.linkDown(l)
         changed = true
+      } else if (l.conn.connected && !l.userId) {
+        // Both sides dialled at once (glare): y-webrtc can end up with each side holding the
+        // wrong half of two connections, "connected" but deaf. No hello means nothing arrives:
+        // drop it after a jittered wait so y-webrtc re-announces and dials again.
+        l.openedAt ??= Date.now() + Math.random() * 4000
+        if (Date.now() - l.openedAt > 8000) l.conn.peer?.destroy()
       }
     }
     const now = Date.now()
@@ -232,7 +295,7 @@ export class P2P {
         ar.h.onState?.('waiting-owner')
       }
       if (!ar.link) {
-        const l = this.linkFor(ar.ownerId)
+        const l = this.pickLink(ar)
         if (l) void this.kick(ar)
         else if (now - ar.startedAt > ar.patienceMs && ar.received === 0) this.fail(ar, new Error('unreachable'))
       }
@@ -253,7 +316,10 @@ export class P2P {
       }
       return orig.call(peer, ev, ...args)
     }
-    const hello = () => void this.sendFrame(link, encodeJSON({ t: 'hello', user: this.self.id, name: this.self.name })).catch(() => {})
+    const hello = () => {
+      void this.sendFrame(link, encodeJSON({ t: 'hello', user: this.self.id, name: this.self.name })).catch(() => {})
+      this.sendHave(link)
+    }
     if (link.conn.connected) hello()
     else peer.once('connect', hello)
   }
@@ -261,6 +327,32 @@ export class P2P {
   private linkFor(userId: string): Link | undefined {
     for (const l of this.links.values()) if (l.userId === userId && l.conn.connected && !l.conn.closed) return l
     return undefined
+  }
+
+  /** Owner first, then any holder of the hash; users waiting on a relink only as a last resort. */
+  private pickLink(ar: ActiveReq, exclude?: string): Link | undefined {
+    const ids = [ar.ownerId, ...(ar.req.hash ? this.holders(ar.req.hash) : [])].filter((id) => id !== exclude && !ar.bad.has(id))
+    for (const id of ids) if (!ar.skip.has(id)) {
+      const l = this.linkFor(id)
+      if (l) return l
+    }
+    for (const id of ids) {
+      const l = this.linkFor(id)
+      if (l) return l
+    }
+    return undefined
+  }
+
+  /** Drop the current source and try another one; false if nobody else can serve right now. */
+  private failover(ar: ActiveReq, mark: Set<string>): boolean {
+    const cur = ar.link
+    if (cur?.userId) mark.add(cur.userId)
+    const next = this.pickLink(ar, cur?.userId)
+    if (!next) return false
+    if (cur) void this.sendFrame(cur, encodeJSON({ t: 'cancel', id: ar.id })).catch(() => {})
+    ar.link = undefined
+    void this.kick(ar)
+    return true
   }
 
   private linkDown(l: Link) {
@@ -317,6 +409,11 @@ export class P2P {
         link.name = msg.name
         this.emit()
         break
+      case 'have':
+        link.have = new Set(msg.hashes)
+        link.aliases = msg.aliases
+        this.emit()
+        break
       case 'get':
         void this.serve(link, msg.id, msg.req)
         break
@@ -337,9 +434,11 @@ export class P2P {
           ar.meta = msg.meta
           ar.h.onMeta?.(msg.meta)
           ar.h.onState?.('active')
-        } else if (msg.t === 'wait') ar.h.onState?.('waiting-relink')
-        else if (msg.t === 'err') this.fail(ar, new Error(msg.code === 'notfound' ? 'not found' : (msg.msg ?? 'failed')))
-        else void ar.chain.then(() => this.finish(ar))
+        } else if (msg.t === 'wait') {
+          if (!this.failover(ar, ar.skip)) ar.h.onState?.('waiting-relink')
+        } else if (msg.t === 'err') {
+          if (!this.failover(ar, ar.bad)) this.fail(ar, new Error(msg.code === 'notfound' ? 'not found' : (msg.msg ?? 'failed')))
+        } else void ar.chain.then(() => this.finish(ar))
         break
       }
     }
@@ -353,7 +452,7 @@ export class P2P {
     ar.chain = ar.chain.then(() => ar.h.onData?.(offset, bytes)).catch((e) => this.fail(ar, e))
   }
 
-  // ---- requesting (this peer wants bytes from `ownerId`) ----
+  // ---- requesting (this peer wants bytes owned by `ownerId`, from them or a holder) ----
   request(ownerId: string, req: GetReq, h: Handlers, opts: { patienceMs?: number } = {}): ReqHandle {
     const id = this.nextId++ >>> 0
     let resolve!: (m: Meta | undefined) => void
@@ -370,7 +469,9 @@ export class P2P {
       received: req.from ?? 0,
       chain: Promise.resolve(),
       settled: false,
-      local: ownerId === this.self.id,
+      bad: new Set(),
+      skip: new Set(),
+      local: ownerId === this.self.id || (req.op === 'file' && !!req.hash && this.mirror.has(req.hash, this.board)),
       startedAt: Date.now(),
       patienceMs: opts.patienceMs ?? (req.op === 'file' ? Infinity : 15000),
       resolve,
@@ -382,10 +483,10 @@ export class P2P {
     return { done, cancel: () => this.cancelReq(ar) }
   }
 
-  private async kick(ar: ActiveReq) {
+  private async kick(ar: ActiveReq): Promise<void> {
     if (ar.settled) return
     if (ar.local) return this.runLocal(ar)
-    const link = this.linkFor(ar.ownerId)
+    const link = this.pickLink(ar)
     if (!link) {
       ar.h.onState?.('waiting-owner')
       return
@@ -393,13 +494,14 @@ export class P2P {
     ar.link = link
     ar.h.onState?.('connecting')
     try {
-      await this.sendFrame(link, encodeJSON({ t: 'get', id: ar.id, req: { ...ar.req, from: ar.received } }))
+      const { alias: _alias, ...req } = ar.req
+      await this.sendFrame(link, encodeJSON({ t: 'get', id: ar.id, req: { ...req, from: ar.received } }))
     } catch {
       ar.link = undefined
     }
   }
 
-  private async runLocal(ar: ActiveReq) {
+  private async runLocal(ar: ActiveReq): Promise<void> {
     try {
       const r = await this.resolve(ar.req)
       if (!r || r === 'relink') throw new Error(r ? 'needs relink' : 'not found')
@@ -412,6 +514,11 @@ export class P2P {
       }, () => ar.settled)
       if (ok) this.finish(ar)
     } catch (e) {
+      // our mirrored copy vanished or went stale: fetch from the owner/holders instead
+      if (ar.ownerId !== this.self.id && !ar.settled) {
+        ar.local = false
+        return this.kick(ar)
+      }
       this.fail(ar, e as Error)
     }
   }
@@ -439,6 +546,11 @@ export class P2P {
   // ---- serving (this peer owns the bytes) ----
   private async resolve(req: GetReq): Promise<Resolved | 'relink' | null> {
     const miss = () => (this.lookup(req.key) ? ('relink' as const) : null)
+    if (req.op === 'file' && req.hash) {
+      const b = await this.mirror.get(req.hash, this.board)
+      const e = this.mirror.entry(req.hash)
+      if (b && e) return { name: e.name, size: b.size, mime: e.mime, mirror: true, read: (a, c) => b.slice(a, c).arrayBuffer() }
+    }
     if (req.kind === 'file') {
       const f = await this.sources.getFile(req.key)
       if (!f) return miss()
@@ -503,13 +615,15 @@ export class P2P {
     const tid = `up:${skey}`
     let tracked = false
     let sent = req.from ?? 0
+    let fromMirror = false
     const send = (m: Wire) => this.sendFrame(link, encodeJSON(m))
     try {
       const r = await this.resolve(req)
       if (r === 'relink') return void (await this.needRelink(link, id, req, sent))
       if (!r) return void (await send({ t: 'err', id, code: 'notfound' }))
+      fromMirror = !!r.mirror
       await send({ t: 'meta', id, meta: { name: r.name, size: r.size, mime: r.mime } })
-      if (req.op === 'file') {
+      if (req.op === 'file' && !req.bg) {
         tracked = true
         this.transfers.add({
           id: tid, dir: 'up', name: r.name, size: r.size, done: sent, state: 'active',
@@ -532,7 +646,7 @@ export class P2P {
       } else if (tracked) this.transfers.patch(tid, { state: 'canceled' })
     } catch (e) {
       const name = (e as Error)?.name
-      if ((name === 'NotFoundError' || name === 'NotReadableError') && !st.cancelled) {
+      if ((name === 'NotFoundError' || name === 'NotReadableError') && !st.cancelled && !fromMirror) {
         // file moved/changed since it was shared: ask the owner to relink and resume from `sent`
         this.sources.forget(req.key)
         if (tracked) this.transfers.patch(tid, { state: 'waiting-relink' })

@@ -41,6 +41,13 @@ export function usePendingRelinks() {
   return useSyncExternalStore(p2p.subscribe, p2p.getPending)
 }
 
+/** Re-renders when background file sync state (progress, holders, cache) changes. */
+export function useFileSync() {
+  const { sync } = useSession()
+  useSyncExternalStore(sync.subscribe, sync.getVersion)
+  return sync
+}
+
 export function useSourcesVersion() {
   const { sources } = useSession()
   return useSyncExternalStore(sources.subscribe, sources.getVersion)

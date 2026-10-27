@@ -1,8 +1,10 @@
 import { BoardStore } from '../model/board'
 import { getProfile, type Profile } from '../lib/storage'
 import { FileService } from './fileService'
+import { Mirror } from './mirror'
 import { P2P } from './p2p'
 import { LocalSources } from './sources'
+import { FileSync } from './sync'
 import { TransferStore } from './transfers'
 
 /** One board's worth of live objects: CRDT doc, mesh networking, file serving. */
@@ -13,31 +15,50 @@ export interface Session {
   p2p: P2P
   files: FileService
   sources: LocalSources
+  mirror: Mirror
+  sync: FileSync
   transfers: TransferStore
 }
 
 /** What this browser can serve is shared across boards (copy/paste between boards keeps working). */
 const sources = new LocalSources()
+const mirror = new Mirror()
 
 function create(id: string): Session {
   const profile = getProfile()
   const store = new BoardStore(id, profile)
   const transfers = new TransferStore()
-  const p2p = new P2P(store.provider, profile, sources, transfers, (key) => {
-    for (const it of store.getSnapshot().all.values()) {
-      if (it.type === 'file' && it.key === key) return { name: it.name, kind: 'file' as const }
-      if (it.type === 'folder' && it.mode === 'disk' && it.key === key) return { name: it.name, kind: 'dir' as const }
-    }
-    return undefined
-  })
-  const files = new FileService(p2p, profile, transfers)
-  // restore persisted handles (Chromium) for everything this person shares, without prompting
+  const p2p = new P2P(
+    store.provider,
+    profile,
+    sources,
+    transfers,
+    (key) => {
+      for (const it of store.getSnapshot().all.values()) {
+        // only items I share: a holder asked for someone else's file must answer notfound, not "relink"
+        if (!('owner' in it) || it.owner !== profile.id) continue
+        if (it.type === 'file' && it.key === key) return { name: it.name, kind: 'file' as const }
+        if (it.type === 'folder' && it.mode === 'disk' && it.key === key) return { name: it.name, kind: 'dir' as const }
+      }
+      return undefined
+    },
+    mirror,
+    id,
+  )
+  const files = new FileService(p2p, profile, transfers, mirror, id)
+  const sync = new FileSync(store, p2p, mirror, sources, files, profile)
   store.onLoaded(() => {
-    for (const it of store.getSnapshot().all.values()) {
+    const all = [...store.getSnapshot().all.values()]
+    // restore persisted handles (Chromium) for everything this person shares, without prompting
+    for (const it of all) {
       if ((it.type === 'file' || (it.type === 'folder' && it.mode === 'disk')) && it.owner === profile.id && it.key) void sources.probe(it.key)
     }
+    // the undo history died with the last visit: drop copies of files this board no longer has
+    const hashes = new Set(all.flatMap((it) => (it.type === 'file' && it.hash ? [it.hash] : [])))
+    const folders = new Set(all.flatMap((it) => (it.type === 'folder' && it.key ? [it.key] : [])))
+    void mirror.gc(id, (e) => hashes.has(e.hash) || e.aliases.some((a) => folders.has(a.slice(0, a.indexOf('/')))))
   })
-  return { id, profile, store, p2p, files, sources, transfers }
+  return { id, profile, store, p2p, files, sources, mirror, sync, transfers }
 }
 
 interface Entry {
@@ -72,6 +93,7 @@ export function releaseSession(id: string) {
     const cur = live.get(id)
     if (!cur || cur.refs > 0) return
     live.delete(id)
+    cur.session.sync.destroy()
     cur.session.p2p.destroy()
     cur.session.store.destroy()
   }, 400)

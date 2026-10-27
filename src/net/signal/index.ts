@@ -1,0 +1,102 @@
+import { NOSTR_RELAYS, TORRENT_TRACKERS } from '../../config'
+import { NativeWebSocket, type Endpoint, type Sink, type Transport } from './core'
+import { NostrSignal } from './nostr'
+import { TrackerSignal } from './torrent'
+
+/**
+ * Serverless signaling for y-webrtc. Its signaling protocol is plain topic pub/sub
+ * (subscribe / publish / ping), so instead of a dedicated server we carry it over public
+ * infrastructure that already relays between browsers: Nostr relays (ephemeral events) and
+ * WebTorrent trackers (the opaque "offer" payload). y-webrtc opens `new WebSocket(url)`
+ * through lib0; for our `p2p-signal://` URLs we hand it an in-page socket bound to one of
+ * these transports. y-webrtc encrypts every signaling message with the room password (the
+ * board id), so relays only ever see ciphertext under a hashed topic.
+ */
+
+const SCHEME = 'p2p-signal://'
+
+const listeners = new Set<() => void>()
+const statusChanged = () => listeners.forEach((l) => l())
+
+const cache = new Map<string, Transport>()
+const makers: Record<string, () => Transport> = {
+  nostr: () => new NostrSignal(NOSTR_RELAYS, statusChanged),
+  torrent: () => new TrackerSignal(TORRENT_TRACKERS, statusChanged),
+}
+function transport(kind: string): Transport | undefined {
+  if (!makers[kind]) return undefined
+  let t = cache.get(kind)
+  if (!t) {
+    t = makers[kind]()
+    cache.set(kind, t)
+  }
+  return t
+}
+
+/** The URLs to hand y-webrtc as `signaling`. */
+export const SIGNAL_URLS = Object.keys(makers).map((k) => SCHEME + k)
+
+/** Stands in for the WebSocket lib0 would open to a y-webrtc signaling server. */
+class SignalSocket implements Sink {
+  readyState = 0
+  binaryType = 'blob'
+  onopen: ((e: unknown) => void) | null = null
+  onmessage: ((e: { data: string }) => void) | null = null
+  onclose: ((e: unknown) => void) | null = null
+  onerror: ((e: unknown) => void) | null = null
+
+  constructor(private t: Transport) {
+    // attach once lib0 has assigned its handlers
+    queueMicrotask(() => this.readyState === 0 && t.attach(this))
+  }
+
+  open() {
+    if (this.readyState !== 0) return
+    this.readyState = 1
+    this.onopen?.({})
+  }
+
+  message(m: unknown) {
+    if (this.readyState === 1) this.onmessage?.({ data: JSON.stringify(m) })
+  }
+
+  send(raw: string) {
+    const m = JSON.parse(raw)
+    if (m.type === 'ping') queueMicrotask(() => this.message({ type: 'pong' }))
+    else if (m.type === 'subscribe') m.topics?.forEach((t: string) => this.t.subscribe(t))
+    else if (m.type === 'unsubscribe') m.topics?.forEach((t: string) => this.t.unsubscribe(t))
+    else if (m.type === 'publish') this.t.publish(m.topic, m.data)
+  }
+
+  /** lib0 reconnects (with a fresh socket) after this fires */
+  close() {
+    if (this.readyState === 3) return
+    this.readyState = 3
+    this.t.detach(this)
+    this.onclose?.({})
+  }
+}
+
+let installed = false
+/** Routes `p2p-signal://` sockets to our transports; every other WebSocket is untouched. */
+export function installSignaling() {
+  if (installed) return
+  installed = true
+  const Patched = function (url: string | URL, protocols?: string | string[]) {
+    const u = String(url)
+    const t = u.startsWith(SCHEME) ? transport(u.slice(SCHEME.length)) : undefined
+    return t ? new SignalSocket(t) : new NativeWebSocket(url, protocols)
+  } as unknown as typeof WebSocket
+  Object.assign(Patched, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3, prototype: NativeWebSocket.prototype })
+  globalThis.WebSocket = Patched
+}
+
+/** Relays/trackers and whether each is connected, for the connection popover. */
+export function signalStatus(): { kind: string; endpoints: Endpoint[] }[] {
+  return Object.keys(makers).map((kind) => ({ kind, endpoints: cache.get(kind)?.endpoints() ?? [] }))
+}
+
+export function onSignalStatus(l: () => void) {
+  listeners.add(l)
+  return () => void listeners.delete(l)
+}

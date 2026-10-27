@@ -11,6 +11,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@noble/curves": "^2.0.1",
     "@tiptap/core": "^2.27.3",
     "@tiptap/extension-collaboration": "^2.27.3",
     "@tiptap/extension-link": "^2.27.3",

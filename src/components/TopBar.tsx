@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { SIGNALING_URLS } from '../config'
 import { renameBoardLocal, saveProfile, USER_COLORS } from '../lib/storage'
 import { toast } from '../lib/toast'
+import { signalStatus } from '../net/signal'
 import { usePeers, useSession } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
 import { Icon } from './Icons'
 import s from './Chrome.module.css'
 
 function useConnection() {
-  const { store, p2p } = useSession()
-  const [st, setSt] = useState({ servers: [] as { url: string; connected: boolean }[], links: 0 })
+  const { p2p } = useSession()
+  const [st, setSt] = useState({ servers: [] as { url: string; kind: string; connected: boolean }[], links: 0 })
   useEffect(() => {
     let last = ''
     const read = () => {
-      const conns: any[] = (store.provider as any).signalingConns ?? []
-      const next = { servers: SIGNALING_URLS.map((url) => ({ url, connected: !!conns.find((c) => c.url === url)?.connected })), links: p2p.peerCount }
+      const servers = signalStatus().flatMap((t) => t.endpoints.map((e) => ({ url: e.url, kind: t.kind, connected: e.open })))
+      const next = { servers, links: p2p.peerCount }
       const key = JSON.stringify(next)
       if (key !== last) {
         last = key
@@ -25,7 +25,7 @@ function useConnection() {
     read()
     const t = setInterval(read, 1000)
     return () => clearInterval(t)
-  }, [store, p2p])
+  }, [p2p])
   return st
 }
 
@@ -109,17 +109,17 @@ export function TopBar({ boardId }: { boardId: string }) {
         <div className={`${s.popover} ${s.connPop}`} data-nodrag>
           <b>Connection</b>
           <p>
-            Board data goes <u>directly between browsers</u> (WebRTC mesh). Signaling servers are only used to introduce peers.
+            Board data goes <u>directly between browsers</u> (WebRTC mesh). Public Nostr relays and WebTorrent trackers only introduce peers, and only ever see encrypted handshakes.
           </p>
           <ul>
             {conn.servers.map((x) => (
               <li key={x.url}>
-                <span className={`${s.led} ${x.connected ? s.ledOk : s.ledBad}`} /> {x.url.replace('wss://', '')}
+                <span className={`${s.led} ${x.connected ? s.ledOk : s.ledBad}`} /> {x.url.replace('wss://', '').replace(/\/announce$/, '')} <span className={s.muted}>{x.kind === 'nostr' ? 'Nostr' : 'tracker'}</span>
               </li>
             ))}
           </ul>
           <p className={s.muted}>
-            {up === 0 ? 'No signaling server reachable: edits are saved locally and will sync when one is. ' : ''}
+            {up === 0 ? 'No relay or tracker reachable: edits are saved locally and will sync when one is. ' : ''}
             {conn.links} direct link{conn.links === 1 ? '' : 's'} · STUN only (no TURN relay)
           </p>
         </div>

@@ -156,7 +156,7 @@ export default function Home() {
       </section>
 
       <footer className={s.foot}>
-        Boards sync directly between browsers over WebRTC (Yjs CRDT). Public signaling servers only introduce peers. Files you share stay on your disk and stream on demand while you’re online.
+        Boards sync directly between browsers over WebRTC (Yjs CRDT). Public Nostr relays and WebTorrent trackers only introduce peers (no server of our own). Files you share stay on your disk; small ones are copied to everyone on the board.
       </footer>
     </main>
   )

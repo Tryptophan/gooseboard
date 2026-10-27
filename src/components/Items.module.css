@@ -20,6 +20,15 @@
 .thumb { flex: 1; min-height: 0; display: grid; place-items: center; background: var(--hover); position: relative; overflow: hidden; }
 .thumb img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 .play { position: absolute; color: #fff; background: rgba(0, 0, 0, 0.5); width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; padding-left: 3px; }
+.sync {
+  position: absolute; left: 6px; top: 6px; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px;
+  border-radius: 999px; font-size: 11px; line-height: 1; background: var(--panel); color: var(--muted);
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.sync b { font-weight: 600; color: var(--text); }
+.sync.synced { color: var(--ok); }
+.sync.syncing { color: var(--accent); }
+.sync.unavailable { color: var(--warn); }
 .cardInfo { padding: 8px 10px; min-width: 0; flex: 0 0 auto; }
 .link .cardInfo { padding: 0; flex: 1; }
 .cardName { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px; }

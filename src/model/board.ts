@@ -1,9 +1,10 @@
 import * as Y from 'yjs'
 import { WebrtcProvider } from 'y-webrtc'
 import { IndexeddbPersistence } from 'y-indexeddb'
-import { ICE_SERVERS, ROOM_PREFIX, SIGNALING_URLS } from '../config'
+import { ICE_SERVERS, ROOM_PREFIX } from '../config'
 import { newItemId } from '../lib/ids'
 import type { Profile } from '../lib/storage'
+import { installSignaling, SIGNAL_URLS } from '../net/signal'
 import { DEFAULT_SIZE, type Item, type Presence } from './types'
 import { fragmentToJSON, jsonToFragment } from './noteSchema'
 
@@ -56,8 +57,11 @@ export class BoardStore {
     readonly profile: Profile,
   ) {
     this.persistence = new IndexeddbPersistence(ROOM_PREFIX + id, this.doc)
+    installSignaling()
     this.provider = new WebrtcProvider(ROOM_PREFIX + id, this.doc, {
-      signaling: SIGNALING_URLS,
+      signaling: SIGNAL_URLS,
+      // signaling crosses public relays: encrypt it with the board id, which only link holders know
+      password: id,
       peerOpts: { config: { iceServers: ICE_SERVERS } },
     })
     this.awareness = this.provider.awareness
@@ -162,6 +166,15 @@ export class BoardStore {
     this.transact(() => {
       for (const [k, v] of Object.entries(patch)) if (m.get(k) !== v) m.set(k, v)
     })
+  }
+
+  /** Background bookkeeping (e.g. content hashes): not an undo step. */
+  updateSilent(id: string, patch: Record<string, any>) {
+    const m = this.items.get(id)
+    if (!m) return
+    this.doc.transact(() => {
+      for (const [k, v] of Object.entries(patch)) if (m.get(k) !== v) m.set(k, v)
+    }, 'gooseboard-system')
   }
 
   updateMany(patches: Record<string, Record<string, any>>) {
