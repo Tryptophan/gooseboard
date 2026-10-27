@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react'
 import { formatSize, kindOf } from '../lib/files'
-import type { GetReq } from '../net/p2p'
+import type { GetReq, ReqState } from '../net/p2p'
+import { canStream } from '../net/streamSW'
 import { useSession } from '../state/session'
 import { Icon } from './Icons'
 import s from './Preview.module.css'
@@ -14,14 +15,24 @@ export interface PreviewArgs {
   mime: string
 }
 
+/** whole-file previews are held in memory; streamed media has no cap */
 const MAX_PREVIEW = 200 * 1024 * 1024
 const Ctx = createContext<(a: PreviewArgs) => void>(() => {})
 export const usePreview = () => useContext(Ctx)
 
+const isMedia = (k: string) => k === 'video' || k === 'audio'
+
 export const canPreview = (name: string, mime: string, size: number) => {
   const k = kindOf(name, mime)
-  return size <= MAX_PREVIEW && (k === 'image' || k === 'video' || k === 'audio' || k === 'pdf' || ((k === 'text' || k === 'code') && size <= 1_000_000))
+  if (isMedia(k) && canStream()) return true
+  return size <= MAX_PREVIEW && (k === 'image' || isMedia(k) || k === 'pdf' || ((k === 'text' || k === 'code') && size <= 1_000_000))
 }
+
+const waitNote = (st: ReqState, owner: string) =>
+  st === 'waiting-owner' ? `Waiting for ${owner} to come online…` : st === 'waiting-relink' ? `Waiting for ${owner} to relink the file…` : null
+
+/** MEDIA_ERR_DECODE / MEDIA_ERR_SRC_NOT_SUPPORTED: the format, not the transfer, is the problem */
+const unplayable = (e: MediaError | null) => e?.code === 3 || e?.code === 4
 
 export function PreviewProvider({ children }: { children: ReactNode }) {
   const [args, setArgs] = useState<PreviewArgs | null>(null)
@@ -41,18 +52,32 @@ function PreviewModal({ args, onClose }: { args: PreviewArgs; onClose: () => voi
   const [err, setErr] = useState<string | null>(null)
   const [note, setNote] = useState('Fetching from ' + (args.ownerId === profile.id ? 'disk' : args.ownerName) + '…')
   const [done, setDone] = useState<number | null>(null)
+  const [stall, setStall] = useState<string | null>(null)
+  const [cantPlay, setCantPlay] = useState(false)
   const urlRef = useRef<string | null>(null)
+  const rangeErr = useRef<string | null>(null)
   const kind = kindOf(args.name, args.mime)
+  const [streamed, setStreamed] = useState(() => isMedia(kind) && canStream())
 
   useEffect(() => {
+    if (!streamed) return
+    const st = files.stream(args.ownerId, args.req, args.size, args.mime, {
+      onState: (x) => setStall(waitNote(x, args.ownerName)),
+      onError: (m) => (rangeErr.current = m),
+    })
+    setUrl(st.url)
+    return () => st.close()
+  }, [files, args, streamed])
+
+  useEffect(() => {
+    if (streamed) return
     let dead = false
     // shared with the Download button, so downloading while (or after) previewing fetches once
     const lease = files.acquire(args.ownerId, args.req)
     const f = lease.fetch
     let frame = 0
     const watch = () => {
-      const st = f.state
-      setNote(st === 'waiting-owner' ? `Waiting for ${args.ownerName} to come online…` : st === 'waiting-relink' ? `Waiting for ${args.ownerName} to relink the file…` : 'Downloading…')
+      setNote(waitNote(f.state, args.ownerName) ?? 'Downloading…')
       // progress arrives per chunk: repaint at most once a frame
       frame ||= requestAnimationFrame(() => {
         frame = 0
@@ -79,7 +104,20 @@ function PreviewModal({ args, onClose }: { args: PreviewArgs; onClose: () => voi
       lease.release()
       if (urlRef.current) URL.revokeObjectURL(urlRef.current)
     }
-  }, [files, args, kind])
+  }, [files, args, kind, streamed])
+
+  const onMediaError = (e: SyntheticEvent<HTMLMediaElement>) => {
+    const me = e.currentTarget.error
+    if (streamed && args.size <= MAX_PREVIEW) {
+      // streaming failed: try the whole file, which the player gets as a plain blob
+      rangeErr.current = null
+      setStall(null)
+      setUrl(null)
+      setStreamed(false)
+    } else if (rangeErr.current) setErr(rangeErr.current)
+    else if (unplayable(me)) setCantPlay(true)
+    else setErr(me?.message || 'playback failed')
+  }
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -103,15 +141,18 @@ function PreviewModal({ args, onClose }: { args: PreviewArgs; onClose: () => voi
         <div className={s.body}>
           {err ? (
             <p className={s.msg}>Couldn’t load: {err}</p>
+          ) : cantPlay ? (
+            <p className={s.msg}>This browser can’t play this format. Download it to open it in another app.</p>
           ) : text !== null ? (
             <pre className={s.text}>{text}</pre>
           ) : url ? (
             kind === 'image' ? (
               <img src={url} alt={args.name} />
-            ) : kind === 'video' ? (
-              <video src={url} controls autoPlay />
-            ) : kind === 'audio' ? (
-              <audio src={url} controls autoPlay />
+            ) : isMedia(kind) ? (
+              <div className={s.media}>
+                {kind === 'video' ? <video src={url} controls autoPlay onError={onMediaError} /> : <audio src={url} controls autoPlay onError={onMediaError} />}
+                {stall && <span className={s.stall}>{stall}</span>}
+              </div>
             ) : kind === 'pdf' ? (
               // no sandbox: Chrome blocks and Firefox blanks their PDF viewers inside one
               <iframe src={url} title={args.name} />

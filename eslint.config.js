@@ -19,6 +19,10 @@ export default tseslint.config(
     },
   },
   {
+    files: ['public/stream-sw.js'],
+    languageOptions: { globals: globals.serviceworker },
+  },
+  {
     files: ['server/**/*.mjs', 'vite.config.ts', 'eslint.config.js'],
     languageOptions: { globals: globals.node },
   },

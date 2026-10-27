@@ -6,6 +6,7 @@ import type { Profile } from '../lib/storage'
 import type { Mirror } from './mirror'
 import type { GetReq, P2P, ReqState } from './p2p'
 import type { DirEntry } from './sources'
+import { openStream, type Stream } from './streamSW'
 import type { TransferStore } from './transfers'
 
 const CONSOLIDATE_AT = 64 * 1024 * 1024
@@ -17,6 +18,12 @@ export interface DownloadArgs {
   req: GetReq
   name: string
   size: number
+}
+
+export interface StreamHandlers {
+  onState?(s: ReqState): void
+  /** a range failed (not called for ranges the player abandoned) */
+  onError?(msg: string): void
 }
 
 export interface BlobOpts {
@@ -195,6 +202,39 @@ export class FileService {
     const entries = JSON.parse(await b.text()) as DirEntry[]
     void set(ck, entries, listingStore).catch(() => {})
     return entries
+  }
+
+  /**
+   * Seekable media URL (see streamSW): each range the player asks for is its own request,
+   * served by the owner or any holder. Ranges can't be hash-verified (only whole files can),
+   * so they aren't mirrored, and they stay out of the server's transfer list.
+   */
+  stream(ownerId: string, req: GetReq, size: number, mime: string, h: StreamHandlers = {}): Stream {
+    const base = this.withHash({ ...req, op: 'file', bg: true })
+    return openStream(size, mime, (from, to, sink) => {
+      let full = false
+      const r = this.p2p.request(ownerId, { ...base, from, to }, {
+        onState: h.onState,
+        onData: (off, b) => {
+          if (full) return
+          // peers on an older build ignore `to` and send the rest of the file: clip and stop them
+          sink.data(off + b.length > to ? b.subarray(0, to - off) : b)
+          if (off + b.length < to) return
+          full = true
+          sink.end()
+          r.cancel()
+        },
+      })
+      r.done.then(
+        () => !full && sink.end(),
+        (e: Error) => {
+          if (full) return
+          if (e.message !== 'canceled') h.onError?.(e.message)
+          sink.error(e.message)
+        },
+      )
+      return () => r.cancel()
+    })
   }
 
   /** Whole-file object URL for in-app preview (images, PDFs, media, text). */

@@ -34,6 +34,8 @@ export interface GetReq {
   key: string
   path?: string
   from?: number
+  /** exclusive end of a byte range (streaming); the whole rest of the file when absent */
+  to?: number
   /** content hash: lets holders other than the owner serve it, and the receiver verify it */
   hash?: string
   /** requester-side only: folder-file alias (see folderAlias) to record a fetched copy under */
@@ -508,7 +510,7 @@ export class P2P {
       ar.meta = { name: r.name, size: r.size, mime: r.mime }
       ar.h.onMeta?.(ar.meta)
       ar.h.onState?.('active')
-      const ok = await this.pump(r, ar.received, async (off, bytes) => {
+      const ok = await this.pump(r, ar.received, ar.req.to, async (off, bytes) => {
         ar.received = off + bytes.length
         await ar.h.onData?.(off, bytes)
       }, () => ar.settled)
@@ -587,17 +589,19 @@ export class P2P {
     return { name: f.name, size: f.size, mime: mimeOf(f.name, f.type), read: (a, b) => f.slice(a, b).arrayBuffer() }
   }
 
-  /** Reads `r` in big blocks and hands out frame-sized pieces. Returns false if cancelled. */
+  /** Reads `r` (up to `to`) in big blocks and hands out frame-sized pieces. Returns false if cancelled. */
   private async pump(
     r: Resolved,
     from: number,
+    to: number | undefined,
     send: (offset: number, bytes: Uint8Array) => Promise<void>,
     cancelled: () => boolean,
   ): Promise<boolean> {
+    const end = Math.min(to ?? r.size, r.size)
     let off = from
-    while (off < r.size) {
+    while (off < end) {
       if (cancelled()) return false
-      const block = new Uint8Array(await r.read(off, Math.min(off + BLOCK, r.size)))
+      const block = new Uint8Array(await r.read(off, Math.min(off + BLOCK, end)))
       if (block.length === 0) throw new Error('short read')
       for (let p = 0; p < block.length; p += PAYLOAD) {
         if (cancelled()) return false
@@ -633,6 +637,7 @@ export class P2P {
       const ok = await this.pump(
         r,
         sent,
+        req.to,
         async (off, bytes) => {
           await this.sendFrame(link, encodeData(id, off, bytes))
           sent = off + bytes.length

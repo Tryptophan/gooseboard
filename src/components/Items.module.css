@@ -26,6 +26,7 @@
   border: 1px solid var(--border); box-shadow: var(--shadow);
 }
 .sync b { font-weight: 600; color: var(--text); }
+.sync.solo { width: 20px; padding: 0; justify-content: center; }
 .sync.synced { color: var(--ok); }
 .sync.syncing { color: var(--accent); }
 .sync.unavailable { color: var(--warn); }

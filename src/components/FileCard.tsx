@@ -71,9 +71,11 @@ const SYNC_LABEL: Record<SyncState['status'], string> = {
 
 function SyncBadge({ st, mine }: { st: SyncState; mine: boolean }) {
   const holders = `${st.holders} ${st.holders === 1 ? 'peer' : 'peers'} online with a copy`
+  // just the status glyph (no percentage or holder count): a circle rather than a pill
+  const solo = st.status !== 'syncing' && st.holders === 0
   const label = st.status === 'syncing' ? `Syncing ${Math.round((st.pct ?? 0) * 100)}%` : SYNC_LABEL[st.status]
   return (
-    <span className={`${s.sync} ${s[st.status]}`} title={`${mine && st.status === 'synced' ? 'Shared from your disk' : label} · ${holders}`}>
+    <span className={`${s.sync} ${s[st.status]} ${solo ? s.solo : ''}`} title={`${mine && st.status === 'synced' ? 'Shared from your disk' : label} · ${holders}`}>
       {st.status === 'syncing' ? `${Math.round((st.pct ?? 0) * 100)}%` : st.status === 'synced' ? '✓' : st.status === 'unsynced' ? '☁' : '!'}
       {st.holders > 0 && <b>{st.holders}</b>}
     </span>
