@@ -11,13 +11,8 @@ Peer-to-peer infinite canvas: notes (rich text/markdown), freehand ink, files, f
     npm run dev          # http://localhost:5173
     npm run lint && npm run typecheck && npm run build
 
-## Signaling (important)
-Signaling only introduces peers. Most public y-webrtc servers are dead (checked 2026-10-26), so **set up your own backups**:
-
-    npm run signaling                       # ws://localhost:4444, deploy anywhere that speaks wss
-    VITE_SIGNALING_URLS=wss://a.example,wss://b.example,wss://c.example npm run build
-
-y-webrtc connects to every URL at once. In GitHub, set repo variable `SIGNALING_URLS` for the Pages build. There is no TURN: strict NATs may fail to connect.
+## Signaling
+Signaling only introduces peers. Dev and production builds both use the public y-webrtc servers listed in `src/config.ts`; y-webrtc connects to every URL at once. There is no TURN: strict NATs may fail to connect.
 
 ## Deploy
 `.github/workflows/deploy.yml` lints, typechecks and builds on every push/PR, and deploys `main` to GitHub Pages (base `/<repo>/`). Enable Pages > Source: GitHub Actions.

@@ -31,8 +31,6 @@ jobs:
         env:
           # Project site => served from /<repo>/. Use "/" for a custom domain.
           VITE_BASE: /${{ github.event.repository.name }}/
-          # Comma-separated wss:// list (repo Settings > Variables). Empty = built-in default.
-          VITE_SIGNALING_URLS: ${{ vars.SIGNALING_URLS }}
       - uses: actions/upload-pages-artifact@v3
         if: github.ref == 'refs/heads/main'
         with:

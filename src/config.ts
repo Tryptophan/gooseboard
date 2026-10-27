@@ -1,20 +1,11 @@
 /**
- * Public y-webrtc signaling servers. Signaling only carries the WebRTC handshake;
- * board data flows peer-to-peer. y-webrtc connects to ALL of these at once, so any
- * single one being down is fine. Override at build time with
- * VITE_SIGNALING_URLS=wss://a,wss://b (see server/signaling.mjs to self-host).
+ * Public y-webrtc signaling servers, used by dev and production builds alike. Signaling
+ * only carries the WebRTC handshake; board data flows peer-to-peer. y-webrtc connects to
+ * ALL of these at once, so any single one being down is fine.
  */
 // Checked 2026-10-26: signaling.yjs.dev (no DNS) and both *.herokuapp.com apps ("No such app")
-// are dead, so they are not listed. This is y-webrtc's own default; add backups via
-// VITE_SIGNALING_URLS (CI reads the repo variable SIGNALING_URLS) or self-host server/signaling.mjs.
-const DEFAULT_SIGNALING = ['wss://y-webrtc-eu.fly.dev']
-
-const fromEnv = (import.meta.env.VITE_SIGNALING_URLS as string | undefined)
-  ?.split(',')
-  .map((s) => s.trim())
-  .filter(Boolean)
-
-export const SIGNALING_URLS: string[] = fromEnv && fromEnv.length ? fromEnv : DEFAULT_SIGNALING
+// are dead, so they are not listed. This is y-webrtc's own default.
+export const SIGNALING_URLS: string[] = ['wss://y-webrtc-eu.fly.dev']
 
 /**
  * STUN only (no TURN): some strict NATs will fail to connect.
