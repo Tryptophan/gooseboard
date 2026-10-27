@@ -63,10 +63,23 @@
 .toast { pointer-events: auto; background: #20242b; color: #fff; padding: 9px 14px; border-radius: 10px; box-shadow: var(--shadow-lg); font-size: 13.5px; display: flex; gap: 12px; align-items: center; max-width: 90vw; }
 .toast button { background: transparent; border: 1px solid rgba(255, 255, 255, 0.4); color: #fff; border-radius: 6px; padding: 2px 8px; cursor: pointer; }
 
-.transfers { position: fixed; z-index: 30; left: 12px; bottom: 66px; width: 300px; max-height: 40vh; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; }
+.tNotice, .tButton { position: fixed; z-index: 30; left: 12px; bottom: 66px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+.tNotice { width: 300px; padding: 4px 6px 6px; }
+.tNotice .bar { margin: 2px 4px 0; }
+.tNoticeTop { display: flex; align-items: center; gap: 4px; }
+.tNoticeMain { flex: 1; min-width: 0; gap: 6px; background: transparent; border: 0; border-radius: 8px; padding: 5px 4px; cursor: pointer; color: var(--text); text-align: left; display: flex; align-items: center; }
+.tNoticeMain:hover, .tIconBtn:hover { background: var(--hover); }
+.tIconBtn { background: transparent; border: 0; cursor: pointer; border-radius: 6px; padding: 4px 6px; display: inline-grid; place-items: center; }
+.tPct { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tButton { width: 42px; height: 42px; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.tButton:hover { background: var(--hover); }
+.tModal { width: min(460px, 100%); max-height: min(560px, calc(100vh - 32px)); }
+.tList { overflow: auto; min-height: 0; margin: 0 -6px; padding: 0 6px; }
 .transfersHead { display: flex; justify-content: space-between; align-items: center; font-weight: 650; }
-.transfersHead button, .transfer button { background: transparent; border: 0; cursor: pointer; border-radius: 6px; padding: 4px 6px; display: inline-grid; place-items: center; }
-.transfersHead button:hover, .transfer button:hover { background: var(--hover); }
+.transfersHead span { display: flex; gap: 2px; }
+.transfersHead button, .transfer button { background: transparent; border: 0; cursor: pointer; border-radius: 6px; padding: 4px 6px; display: inline-grid; place-items: center; color: var(--text); }
+.transfersHead button:hover:not(:disabled), .transfer button:hover { background: var(--hover); }
+.transfersHead button:disabled { opacity: 0.4; cursor: default; }
 .transfer { padding: 6px 4px; border-top: 1px solid var(--border); margin-top: 4px; }
 .transferTop { display: flex; align-items: center; gap: 6px; }
 .tName { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
@@ -84,6 +97,7 @@
   .minimap { display: none; }
   .boardName { min-width: 60px; max-width: 28vw; }
   .shareBtn { padding: 7px 10px; }
-  .transfers { width: calc(100vw - 24px); bottom: 124px; }
+  .tNotice, .tButton { bottom: 120px; }
+  .tNotice { width: calc(100vw - 24px); }
   .zoom { bottom: 70px; }
 }
