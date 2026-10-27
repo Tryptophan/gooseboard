@@ -100,7 +100,7 @@ export default function Home() {
         <img src={`${import.meta.env.BASE_URL}favicon.svg`} width={44} height={44} alt="" />
         <div>
           <h1>Gooseboard</h1>
-          <p>A collaborative decentralized board. Notes, ink, files and folders, shared live between browsers. No accounts, no cloud.</p>
+          <p>A simple collaborative decentralized workspace. Notes, ink, files and folders, shared live between browsers. No accounts, no cloud.</p>
         </div>
         <button className={s.theme} onClick={theme.toggle} title={theme.dark ? 'Switch to light theme' : 'Switch to dark theme'}>
           <Icon name={theme.dark ? 'moon' : 'sun'} size={18} />
