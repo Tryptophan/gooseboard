@@ -48,3 +48,14 @@ export function fragmentToText(fragment: Y.XmlFragment): string {
   if (!json || !json.content) return ''
   return PMNode.fromJSON(noteSchema, json).textBetween(0, PMNode.fromJSON(noteSchema, json).content.size, '\n')
 }
+
+/** Flip the nth task item (document order, matching the rendered <li>s) without opening the editor. */
+export function toggleTask(fragment: Y.XmlFragment, index: number) {
+  let n = 0
+  for (const el of fragment.createTreeWalker((x) => (x as Y.XmlElement).nodeName === 'taskItem')) {
+    if (n++ !== index) continue
+    const item = el as Y.XmlElement
+    item.setAttribute('checked', !item.getAttribute('checked') as any)
+    return
+  }
+}

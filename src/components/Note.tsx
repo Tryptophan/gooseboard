@@ -3,7 +3,7 @@ import { EditorContent, useEditor, type Editor } from '@tiptap/react'
 import Collaboration from '@tiptap/extension-collaboration'
 import Placeholder from '@tiptap/extension-placeholder'
 import type * as Y from 'yjs'
-import { fragmentToHTML, noteExtensions } from '../model/noteSchema'
+import { fragmentToHTML, noteExtensions, toggleTask } from '../model/noteSchema'
 import type { NoteItem } from '../model/types'
 import { useSession, useSnapshot } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
@@ -19,6 +19,7 @@ export function NoteBody({ item, editing }: { item: NoteItem; editing: boolean }
 
 function NoteStatic({ id, fragment, color }: { id: string; fragment: Y.XmlFragment; color: string }) {
   const dispatch = useUiDispatch()
+  const { store } = useSession()
   const [html, setHtml] = useState(() => fragmentToHTML(fragment))
   useEffect(() => {
     let raf = 0
@@ -33,9 +34,18 @@ function NoteStatic({ id, fragment, color }: { id: string; fragment: Y.XmlFragme
       cancelAnimationFrame(raf)
     }
   }, [fragment])
+  // checkboxes toggle in place; the doc is the source of truth, so cancel the DOM's own flip
+  const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const box = (e.target as HTMLElement).closest('input[type=checkbox]')
+    const li = box?.closest('li[data-type=taskItem]')
+    if (!li) return
+    e.preventDefault()
+    const index = [...e.currentTarget.querySelectorAll('li[data-type=taskItem]')].indexOf(li)
+    store.transact(() => toggleTask(fragment, index))
+  }
   return (
     <div className={s.box} style={{ background: color }}>
-      <div className={s.prose} dangerouslySetInnerHTML={{ __html: html || '<p class="empty">Double-click to write…</p>' }} />
+      <div className={s.prose} onClick={onClick} dangerouslySetInnerHTML={{ __html: html || '<p class="empty">Double-click to write…</p>' }} />
       <button className={s.expand} title="Open in window  Shift+Enter" onClick={() => dispatch({ type: 'noteModal', id })} onDoubleClick={(e) => e.stopPropagation()}>
         <Icon name="expand" size={14} />
       </button>

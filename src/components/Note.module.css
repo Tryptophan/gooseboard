@@ -15,13 +15,15 @@
 .prose h1 { font-size: 1.5em; } .prose h2 { font-size: 1.3em; } .prose h3 { font-size: 1.12em; }
 .prose ul, .prose ol { margin: 0 0 0.45em; padding-left: 1.3em; }
 .prose ul[data-type='taskList'] { list-style: none; padding-left: 0.2em; }
-.prose li[data-type='taskItem'] { display: flex; gap: 0.5em; align-items: flex-start; }
-.prose li[data-type='taskItem'] > label { margin-top: 0.15em; user-select: none; }
-.prose li[data-type='taskItem'] > div { flex: 1; }
-.prose li[data-type='taskItem'] > div > p { margin: 0; }
-.prose li[data-type='taskItem'][data-checked='true'] > div { text-decoration: line-through; opacity: 0.55; }
-.prose :global(label) input { pointer-events: none; }
-.editing :global(label) input { pointer-events: auto; cursor: pointer; }
+/* the editor's node view drops data-type on the <li>, so key off the list instead */
+.prose ul[data-type='taskList'] > li { display: flex; gap: 0.5em; align-items: flex-start; }
+.prose ul[data-type='taskList'] > li > label { margin-top: 0.15em; user-select: none; }
+.prose ul[data-type='taskList'] > li > div { flex: 1; }
+.prose ul[data-type='taskList'] > li > div > p { margin: 0; }
+.prose ul[data-type='taskList'] > li[data-checked='true'] > div { text-decoration: line-through; opacity: 0.55; }
+/* only the box itself is a click target; the rest of the label still grabs the note */
+.prose :global(label) { pointer-events: none; }
+.prose :global(label) input { pointer-events: auto; cursor: pointer; }
 .prose code { background: rgba(0, 0, 0, 0.09); padding: 0.1em 0.3em; border-radius: 4px; font-size: 0.9em; }
 .prose pre { background: rgba(0, 0, 0, 0.1); padding: 8px 10px; border-radius: 8px; overflow: auto; }
 .prose pre code { background: none; padding: 0; }
