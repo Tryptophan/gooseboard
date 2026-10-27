@@ -47,7 +47,7 @@
 .contextBar > :first-child:not(:last-child) { padding-bottom: 4px; border-bottom: 1px solid var(--border); }
 .contextBar button { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
 .contextBar button:hover { background: var(--hover); }
-.contextBar .danger:hover { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+.contextBar .danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger-strong); }
 .swatch { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border); padding: 0; cursor: pointer; margin: 0 2px; flex: none; }
 .contextBar .swatch { width: 20px; height: 20px; }
 .rainbow { background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red); position: relative; overflow: hidden; }

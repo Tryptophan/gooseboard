@@ -9,6 +9,8 @@
   --accent: #2f6df6;
   --accent-soft: #e4ecff;
   --danger: #e5484d;
+  /* red text on hover/tinted backgrounds: >= 4.5:1 where --danger isn't */
+  --danger-strong: #c4242a;
   --ok: #30a46c;
   --warn: #d9a400;
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 4px 14px rgba(16, 24, 40, 0.1);
@@ -26,6 +28,7 @@
   --hover: #2a2f37;
   --accent: #6c93ff;
   --accent-soft: #26335a;
+  --danger-strong: #ff6b70;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.6);
   color-scheme: dark;
