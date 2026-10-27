@@ -1,6 +1,6 @@
 # Gooseboard
 
-A simple collaborative decentralized workspace for notes, ink, files and folders, shared live between browsers. No accounts, no cloud: open [gooseboard.io](https://gooseboard.io), share the link, and everyone with it edits the same board in real time, peer to peer.
+A simple collaborative decentralized workspace for notes, ink, files and folders, shared live between browsers. No accounts or cloud: open [gooseboard.io](https://gooseboard.io), share the link, and everyone with it edits the same board in real time, peer to peer.
 
 ## Features
 
