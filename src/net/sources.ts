@@ -1,4 +1,4 @@
-import { createStore, del, get, set } from 'idb-keyval'
+import { createStore, del, entries, get, set } from 'idb-keyval'
 import { mimeOf } from '../lib/files'
 
 export interface DirEntry {
@@ -137,6 +137,12 @@ export async function readEntryTree(entry: any): Promise<{ name: string; source:
 
 type Listener = () => void
 
+/** A pasted file's bytes, kept in IndexedDB beside the handles, and the boards that show it. */
+interface Kept {
+  kept: File
+  boards: string[]
+}
+
 /**
  * What THIS browser can serve. Files are never uploaded: bytes are read from disk on demand.
  * Chromium persists handles in IndexedDB so sharing survives reloads; Firefox holds File
@@ -158,9 +164,14 @@ export class LocalSources {
     this.listeners.forEach((l) => l())
   }
 
-  registerFile(key: string, file: File, handle?: any) {
+  /**
+   * `keepFor` (a board id) stores the bytes themselves: pasted files have no disk handle to
+   * reopen after a reload. Each board using a kept file is listed so `gcKept` can drop it.
+   */
+  registerFile(key: string, file: File, handle?: any, keepFor?: string) {
     this.files.set(key, file)
     if (handle) set(key, handle, handleStore).catch(() => {})
+    else if (keepFor) set(key, { kept: file, boards: [keepFor] } satisfies Kept, handleStore).catch(() => {})
     this.bump()
   }
 
@@ -187,6 +198,11 @@ export class LocalSources {
     try {
       const h: any = await get(key, handleStore)
       if (!h) return false
+      if (h.kept instanceof Blob) {
+        this.files.set(key, h.kept)
+        this.bump()
+        return true
+      }
       if ((await h.queryPermission?.({ mode: 'read' })) !== 'granted') return false
       await this.adopt(key, h)
       return true
@@ -200,6 +216,7 @@ export class LocalSources {
     try {
       const h: any = await get(key, handleStore)
       if (!h) return false
+      if (h.kept instanceof Blob) return this.probe(key)
       if ((await h.requestPermission?.({ mode: 'read' })) !== 'granted') return false
       await this.adopt(key, h)
       return true
@@ -231,6 +248,22 @@ export class LocalSources {
       return { file: await handle.getFile(), handle }
     }
     return { file: await d.getFile(path) }
+  }
+
+  /** On board load: claim the kept files `board` still shows, release the rest, delete unclaimed ones. */
+  async gcKept(board: string, used: Set<string>) {
+    for (const [k, v] of await entries<string, any>(handleStore).catch(() => [] as [string, any][])) {
+      if (!(v?.kept instanceof Blob)) continue
+      const kept = v as Kept
+      const has = kept.boards.includes(board)
+      if (used.has(k) === has) continue
+      const boards = has ? kept.boards.filter((b) => b !== board) : [...kept.boards, board]
+      if (boards.length) await set(k, { ...kept, boards }, handleStore).catch(() => {})
+      else {
+        await del(k, handleStore).catch(() => {})
+        this.files.delete(k)
+      }
+    }
   }
 
   async getDir(key: string): Promise<DirSource | null> {

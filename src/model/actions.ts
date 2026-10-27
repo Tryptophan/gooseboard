@@ -8,8 +8,22 @@ import { blobToDataURL, makeThumb } from '../net/thumbs'
 import { DEFAULT_SIZE, FOLDER_COLORS } from './types'
 
 export type DropItem =
-  | { kind: 'file'; file: File; handle?: any }
+  | { kind: 'file'; file: File; handle?: any; keep?: boolean }
   | { kind: 'dir'; name: string; source: DirSource; handle?: any }
+
+const pad = (n: number) => String(n).padStart(2, '0')
+
+/** Clipboard files, kept in IndexedDB; browsers name screenshots 'image.png', so those get a timestamp. */
+export function pastedItems(files: File[]): DropItem[] {
+  const d = new Date()
+  const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}.${pad(d.getMinutes())}`
+  return files.map((f) => {
+    const ext = /\.([a-z0-9]+)$/i.exec(f.name)?.[1] ?? f.type.split('/')[1]?.replace(/\W.*/, '') ?? 'bin'
+    const generic = !f.name || /^(image|blob|untitled|clipboard)(\.[a-z0-9]+)?$/i.test(f.name)
+    const file = generic ? new File([f], `Pasted ${stamp}.${ext === 'jpeg' ? 'jpg' : ext}`, { type: f.type, lastModified: f.lastModified }) : f
+    return { kind: 'file', file, keep: true }
+  })
+}
 
 /** Must be called synchronously inside the drop event (DataTransfer is cleared afterwards). */
 export async function readDrop(dt: DataTransfer): Promise<DropItem[]> {
@@ -130,7 +144,7 @@ export async function addDropItems(
     n++
     const key = newItemId()
     if (it.kind === 'file') {
-      s.sources.registerFile(key, it.file, it.handle)
+      s.sources.registerFile(key, it.file, it.handle, it.keep ? s.id : undefined)
       ids.push(
         s.store.add({
           type: 'file', name: it.file.name, size: it.file.size, mime: mimeOf(it.file.name, it.file.type),

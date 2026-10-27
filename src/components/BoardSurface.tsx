@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from 'react'
 import { MAX_ZOOM, MIN_ZOOM } from '../config'
 import { bounds, clamp, distToSegment, pointInItem, rectsIntersect, rotate, snapAngle, toLocal, unionBounds, type Rect, type Vec } from '../lib/geometry'
+import { linkBox } from '../lib/embed'
 import { isUrl } from '../lib/files'
 import { toast } from '../lib/toast'
 import { downsample, pointsBounds, strokePath } from '../lib/stroke'
 import { normalizeUrl } from '../lib/url'
-import { addDropItems, pickFiles, readDrop } from '../model/actions'
+import { addDropItems, pastedItems, pickFiles, readDrop } from '../model/actions'
 import type { ExportedItem } from '../model/board'
 import { jsonToFragment } from '../model/noteSchema'
 import { DEFAULT_SIZE, FOLDER_COLORS, NOTE_COLORS, type FileItem, type Item, type Presence, type StrokeItem } from '../model/types'
@@ -33,6 +34,26 @@ type Inter =
 
 const CLIP_PREFIX = 'GOOSEBOARD:'
 const isTyping = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"], .ProseMirror')
+
+/** True when the wheel is over something that scrolls (a long note): that owns the wheel, even at its ends. */
+/** Whether a scroller between the target and `host` can still move in the wheel's direction. */
+function canScrollFurther(t: HTMLElement, host: HTMLElement, e: WheelEvent): boolean {
+  for (let n: HTMLElement | null = t; n && n !== host; n = n.parentElement) {
+    const st = getComputedStyle(n)
+    if (/auto|scroll/.test(st.overflowY) && ((e.deltaY > 0 && n.scrollTop + n.clientHeight < n.scrollHeight - 1) || (e.deltaY < 0 && n.scrollTop > 0))) return true
+    if (/auto|scroll/.test(st.overflowX) && ((e.deltaX > 0 && n.scrollLeft + n.clientWidth < n.scrollWidth - 1) || (e.deltaX < 0 && n.scrollLeft > 0))) return true
+  }
+  return false
+}
+
+function overScroller(e: WheelEvent, host: HTMLElement): boolean {
+  for (let n = e.target as HTMLElement | null; n && n !== host; n = n.parentElement) {
+    const st = getComputedStyle(n)
+    if (/auto|scroll/.test(st.overflowY) && n.scrollHeight > n.clientHeight) return true
+    if (/auto|scroll/.test(st.overflowX) && n.scrollWidth > n.clientWidth) return true
+  }
+  return false
+}
 
 export function BoardSurface() {
   const session = useSession()
@@ -151,6 +172,12 @@ export function BoardSurface() {
   useEffect(() => {
     const el = hostRef.current!
     const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey && overScroller(e, el)) {
+        // let the note scroll natively; at its ends, swallow the rest so the board never pans
+        const n = e.target as HTMLElement
+        if (!canScrollFurther(n, el, e)) e.preventDefault()
+        return
+      }
       e.preventDefault()
       const k = e.deltaMode === 1 ? 16 : 1
       dispatch({ type: 'follow', clientId: null })
@@ -553,7 +580,7 @@ export function BoardSurface() {
           onSelect: async () => {
             const n = await promptDialog({ title: 'Edit link', value: only.url, placeholder: 'https://…', ok: 'Save' })
             const u = n && normalizeUrl(n)
-            if (u) store.update(only.id, { url: u })
+            if (u) store.update(only.id, { url: u, ...linkBox(only, u, only.card) })
             else if (n) toast('Only http(s) links can be added')
           },
         },
@@ -647,15 +674,29 @@ export function BoardSurface() {
     }
   }
 
+  const pasteFiles = useCallback(
+    async (files: File[], at: Vec) => dispatch({ type: 'select', ids: await addDropItems(session, pastedItems(files), at, null, { avoidOverlap: true }) }),
+    [session, dispatch],
+  )
+
   const readClip = async (at: Vec) => {
-    let text: string
+    let text = ''
+    const files: File[] = []
     try {
-      text = await navigator.clipboard.readText()
+      // the async API only exposes images (and text), never copied files from a file manager
+      if (navigator.clipboard.read) {
+        for (const ci of await navigator.clipboard.read()) {
+          const img = ci.types.find((t) => t.startsWith('image/'))
+          if (img) files.push(new File([await ci.getType(img)], '', { type: img }))
+          else if (!text && ci.types.includes('text/plain')) text = await (await ci.getType('text/plain')).text()
+        }
+      } else text = await navigator.clipboard.readText()
     } catch {
       return toast('Couldn’t read the clipboard: press Ctrl+V instead')
     }
-    if (text) pasteText(text, at)
-    else toast('Nothing to paste (files paste with Ctrl+V)')
+    if (files.length && !text.startsWith(CLIP_PREFIX)) await pasteFiles(files, at)
+    else if (text) pasteText(text, at)
+    else toast('Nothing to paste (copied files paste with Ctrl+V)')
   }
 
   // ---- OS drag & drop ----
@@ -711,8 +752,8 @@ export function BoardSurface() {
         dispatch({ type: 'select', ids })
       } else if (isUrl(text)) {
         store.undo.stopCapturing()
-        const sz = DEFAULT_SIZE.link
-        const id = store.add({ type: 'link', url: text.trim(), x: Math.round(at.x - sz.w / 2), y: Math.round(at.y - sz.h / 2) })
+        const url = text.trim()
+        const id = store.add({ type: 'link', url, ...linkBox({ ...at, w: 0, h: 0 }, url) })
         dispatch({ type: 'select', ids: [id] })
       } else if (text.trim()) {
         const id = placeItem({ type: 'note', color: NOTE_COLORS[0] }, at)
@@ -760,8 +801,7 @@ export function BoardSurface() {
       const text = cd.getData('text/plain')
       const files = Array.from(cd.files)
       if (files.length && !text.startsWith(CLIP_PREFIX)) {
-        const ids = await addDropItems(session, files.map((file) => ({ kind: 'file' as const, file })), pasteAt(), null, { avoidOverlap: true })
-        dispatch({ type: 'select', ids })
+        await pasteFiles(files, pasteAt())
       } else pasteText(text, pasteAt())
     }
 
@@ -879,7 +919,7 @@ export function BoardSurface() {
       document.removeEventListener('cut', cut)
       document.removeEventListener('paste', onPaste)
     }
-  }, [store, camApi, dispatch, session, placeItem, pasteText, clipText, afterCopy, previewIfPossible])
+  }, [store, camApi, dispatch, session, placeItem, pasteText, pasteFiles, clipText, afterCopy, previewIfPossible])
 
   const cursorClass =
     spaceDown || ui.tool === 'hand' ? s.grab : ui.tool === 'pen' || ui.tool === 'highlighter' || ui.tool === 'eraser' ? s.crosshair : ui.tool === 'select' ? '' : s.place

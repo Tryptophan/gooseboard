@@ -62,6 +62,8 @@ export interface LinkItem extends ItemBase {
   type: 'link'
   url: string
   title?: string
+  /** show a plain card even when the link has an embed (lib/embed) */
+  card?: boolean
 }
 
 export type Item = NoteItem | StrokeItem | FileItem | FolderItem | LinkItem

@@ -1,12 +1,15 @@
-import { memo, useState, type CSSProperties } from 'react'
+import { memo, useMemo, useState, type CSSProperties } from 'react'
 import { strokePath } from '../lib/stroke'
+import { embedFor, linkBox } from '../lib/embed'
 import { normalizeUrl } from '../lib/url'
 import { relink } from '../model/actions'
 import type { FolderItem, Item, LinkItem, StrokeItem } from '../model/types'
 import { useSession, usePeers, useSourcesVersion } from '../state/session'
+import { EmbedFrame } from './EmbedFrame'
 import { FileBody } from './FileCard'
 import { Icon } from './Icons'
 import { NoteBody } from './Note'
+import { useEmbedPreview } from './Preview'
 import s from './Items.module.css'
 
 interface Props {
@@ -34,7 +37,7 @@ export const ItemView = memo(function ItemView({ item, selected, dropTarget, edi
       {item.type === 'stroke' && <StrokeBody item={item} />}
       {item.type === 'file' && <FileBody item={item} />}
       {item.type === 'folder' && <FolderBody item={item} childCount={childCount} />}
-      {item.type === 'link' && <LinkBody item={item} editing={editing} />}
+      {item.type === 'link' && <LinkBody item={item} editing={editing} selected={selected} />}
     </div>
   )
 })
@@ -91,12 +94,14 @@ function FolderBody({ item, childCount }: { item: FolderItem; childCount: number
   )
 }
 
-function LinkBody({ item, editing }: { item: LinkItem; editing: boolean }) {
+function LinkBody({ item, editing, selected }: { item: LinkItem; editing: boolean; selected: boolean }) {
   const { store } = useSession()
   const [draft, setDraft] = useState('')
   const [iconFailed, setIconFailed] = useState(false)
   const url = normalizeUrl(item.url)
   const host = url ? new URL(url).host : ''
+  const previewEmbed = useEmbedPreview()
+  const embed = useMemo(() => (item.card ? null : embedFor(item.url)), [item.url, item.card])
 
   if (!item.url) {
     return (
@@ -112,7 +117,7 @@ function LinkBody({ item, editing }: { item: LinkItem; editing: boolean }) {
             e.stopPropagation()
             if (e.key === 'Enter') {
               const u = normalizeUrl(draft)
-              if (u) store.update(item.id, { url: u })
+              if (u) store.update(item.id, { url: u, ...linkBox(item, u) })
             }
             if (e.key === 'Escape') store.remove([item.id])
           }}
@@ -120,15 +125,35 @@ function LinkBody({ item, editing }: { item: LinkItem; editing: boolean }) {
       </div>
     )
   }
+  const favicon =
+    url && !iconFailed ? (
+      <img src={`${new URL(url).origin}/favicon.ico`} alt="" referrerPolicy="no-referrer" loading="lazy" onError={() => setIconFailed(true)} draggable={false} />
+    ) : (
+      <Icon name="link" size={18} />
+    )
+  if (embed && url) {
+    return (
+      <div className={`${s.card} ${s.embed}`}>
+        <div className={s.embedHead} title={item.url}>
+          <span className={s.favicon}>{favicon}</span>
+          <span className={s.cardName}>{item.title || embed.provider}</span>
+          <button data-nodrag title="Preview" onClick={() => previewEmbed({ url, title: item.title || embed.provider })}>
+            <Icon name="eye" size={15} />
+          </button>
+        </div>
+        {/* clicks select the item until it's selected; then the player takes them */}
+        <EmbedFrame
+          embed={embed}
+          className={s.embedFrame}
+          style={selected ? undefined : { pointerEvents: 'none' }}
+          title={`${embed.provider}: ${item.title || host}`}
+        />
+      </div>
+    )
+  }
   return (
     <div className={`${s.card} ${s.link}`}>
-      <div className={s.favicon}>
-        {url && !iconFailed ? (
-          <img src={`${new URL(url).origin}/favicon.ico`} alt="" referrerPolicy="no-referrer" loading="lazy" onError={() => setIconFailed(true)} draggable={false} />
-        ) : (
-          <Icon name="link" size={18} />
-        )}
-      </div>
+      <div className={s.favicon}>{favicon}</div>
       <div className={s.cardInfo}>
         <div className={s.cardName} title={item.url}>
           {item.title || host || 'Invalid link'}

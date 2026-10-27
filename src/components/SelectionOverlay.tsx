@@ -1,3 +1,4 @@
+import { embedFor } from '../lib/embed'
 import type { Item } from '../model/types'
 import { unionBounds } from '../lib/geometry'
 import s from './BoardSurface.module.css'
@@ -13,7 +14,7 @@ const HANDLES = [
   { id: 'w', x: 0, y: 0.5, cur: 'ew-resize' },
 ]
 
-export const isResizable = (it: Item) => it.type === 'note' || it.type === 'stroke'
+export const isResizable = (it: Item) => it.type === 'note' || it.type === 'stroke' || (it.type === 'link' && !it.card && !!embedFor(it.url))
 
 /** Outlines for every selected item; resize/rotate handles when exactly one is selected. */
 export function SelectionOverlay({ items, editing }: { items: Item[]; editing: boolean }) {

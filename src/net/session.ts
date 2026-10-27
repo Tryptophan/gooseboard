@@ -59,6 +59,7 @@ function create(id: string): Session {
     // the undo history died with the last visit: drop copies of files this board no longer has
     const hashes = new Set(all.flatMap((it) => (it.type === 'file' && it.hash ? [it.hash] : [])))
     const folders = new Set(all.flatMap((it) => (it.type === 'folder' && it.key ? [it.key] : [])))
+    void sources.gcKept(id, new Set(all.flatMap((it) => (it.type === 'file' && it.owner === profile.id ? [it.key] : []))))
     void mirror.gc(id, (e) => hashes.has(e.hash) || e.aliases.some((a) => folders.has(a.slice(0, a.indexOf('/')))))
   })
   const presence = joinPresence(id, profile, () => store.name)

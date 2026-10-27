@@ -1,3 +1,4 @@
+import { embedFor, linkBox } from '../lib/embed'
 import { clamp, unionBounds } from '../lib/geometry'
 import { FOLDER_COLORS, NOTE_COLORS, PEN_COLORS, type Item } from '../model/types'
 import { useCamera } from '../state/camera'
@@ -68,6 +69,17 @@ export function ContextBar({ items }: { items: Item[] }) {
         {only?.type === 'note' && (
           <button title="Open in window  Shift+Enter" onClick={() => dispatch({ type: 'noteModal', id: only.id })}>
             <Icon name="expand" size={17} />
+          </button>
+        )}
+        {only?.type === 'link' && embedFor(only.url) && (
+          <button
+            title={only.card ? 'Show as embed' : 'Show as card'}
+            onClick={() => {
+              store.undo.stopCapturing()
+              store.update(only.id, { card: !only.card, ...linkBox(only, only.url, !only.card) })
+            }}
+          >
+            <Icon name={only.card ? 'eye' : 'link'} size={17} />
           </button>
         )}
         {only?.type === 'folder' && (

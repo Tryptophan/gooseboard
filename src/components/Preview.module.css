@@ -3,8 +3,9 @@
 .head { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
 .head b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .head span { color: var(--muted); font-size: 13px; }
-.head button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
-.head button:hover { background: var(--hover); }
+.head button, .headBtn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
+.headBtn { text-decoration: none; }
+.head button:hover, .headBtn:hover { background: var(--hover); }
 .body { padding: 12px; overflow: auto; display: grid; place-items: center; min-height: 240px; }
 .media { position: relative; display: grid; place-items: center; max-width: 100%; }
 .stall { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); padding: 6px 10px; border-radius: 8px; background: rgba(8, 10, 16, 0.75); color: #fff; font-size: 13px; white-space: nowrap; pointer-events: none; }

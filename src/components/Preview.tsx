@@ -1,8 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react'
+import { embedFor } from '../lib/embed'
 import { formatSize, kindOf } from '../lib/files'
 import type { GetReq, ReqState } from '../net/p2p'
 import { canStream } from '../net/streamSW'
 import { useSession } from '../state/session'
+import { EmbedFrame } from './EmbedFrame'
 import { Icon } from './Icons'
 import s from './Preview.module.css'
 
@@ -20,6 +22,13 @@ const MAX_PREVIEW = 200 * 1024 * 1024
 const Ctx = createContext<(a: PreviewArgs) => void>(() => {})
 export const usePreview = () => useContext(Ctx)
 
+export interface EmbedPreviewArgs {
+  url: string
+  title: string
+}
+const EmbedCtx = createContext<(a: EmbedPreviewArgs) => void>(() => {})
+export const useEmbedPreview = () => useContext(EmbedCtx)
+
 const isMedia = (k: string) => k === 'video' || k === 'audio'
 
 export const canPreview = (name: string, mime: string, size: number) => {
@@ -36,12 +45,55 @@ const unplayable = (e: MediaError | null) => e?.code === 3 || e?.code === 4
 
 export function PreviewProvider({ children }: { children: ReactNode }) {
   const [args, setArgs] = useState<PreviewArgs | null>(null)
+  const [embed, setEmbed] = useState<EmbedPreviewArgs | null>(null)
   const open = useCallback((a: PreviewArgs) => setArgs(a), [])
+  const openEmbed = useCallback((a: EmbedPreviewArgs) => setEmbed(a), [])
   return (
     <Ctx.Provider value={open}>
-      {children}
-      {args && <PreviewModal args={args} onClose={() => setArgs(null)} />}
+      <EmbedCtx.Provider value={openEmbed}>
+        {children}
+        {args && <PreviewModal args={args} onClose={() => setArgs(null)} />}
+        {embed && <EmbedModal args={embed} onClose={() => setEmbed(null)} />}
+      </EmbedCtx.Provider>
     </Ctx.Provider>
+  )
+}
+
+function useEscape(onClose: () => void) {
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose])
+}
+
+/** A link's player at a size you can actually use, keeping the provider's aspect ratio. */
+function EmbedModal({ args, onClose }: { args: EmbedPreviewArgs; onClose: () => void }) {
+  useEscape(onClose)
+  const embed = embedFor(args.url)
+  if (!embed) return null
+  return (
+    <div className={s.backdrop} onClick={onClose}>
+      <div className={s.box} onClick={(e) => e.stopPropagation()}>
+        <div className={s.head}>
+          <b title={args.url}>{args.title}</b>
+          <span>{embed.provider}</span>
+          <a className={s.headBtn} href={args.url} target="_blank" rel="noopener noreferrer">
+            Open in new tab
+          </a>
+          <button onClick={onClose} aria-label="Close">
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+        <div className={s.body}>
+          <EmbedFrame
+            embed={embed}
+            title={`${embed.provider}: ${args.title}`}
+            style={{ width: `min(100%, calc(72vh * ${embed.w} / ${embed.h}))`, height: 'auto', aspectRatio: `${embed.w} / ${embed.h}` }}
+          />
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -119,11 +171,7 @@ function PreviewModal({ args, onClose }: { args: PreviewArgs; onClose: () => voi
     else setErr(me?.message || 'playback failed')
   }
 
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  }, [onClose])
+  useEscape(onClose)
 
   return (
     <div className={s.backdrop} onClick={onClose}>
