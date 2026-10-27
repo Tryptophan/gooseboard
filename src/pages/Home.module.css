@@ -47,4 +47,6 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   .list li { flex-wrap: wrap; justify-content: flex-end; }
   .list .open { flex-basis: 100%; }
   .online { flex-basis: 50%; }
+  /* the name fills the line beside the avatar; the colors wrap below */
+  .profileRow input { flex: 1 1 calc(100% - 44px); min-width: 0; }
 }
