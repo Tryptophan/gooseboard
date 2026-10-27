@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
-import { Canvas } from '../components/Canvas'
+import { BoardSurface } from '../components/BoardSurface'
 import { FolderPanel } from '../components/FolderPanel'
 import { NoteModal } from '../components/Note'
 import { Icon } from '../components/Icons'
@@ -56,7 +56,7 @@ function Board({ id }: { id: string }) {
   return (
     <CameraProvider initial={initial}>
       <PreviewProvider>
-        <Canvas />
+        <BoardSurface />
         <TopBar boardId={id} />
         <RelinkBanner />
         <FolderPanel />
@@ -85,7 +85,7 @@ function ZoomControls() {
   const camApi = useCamera()
   const snap = useSnapshot()
   const fit = () => {
-    const b = unionBounds(snap.canvas)
+    const b = unionBounds(snap.surface)
     if (b) camApi.fitRect(b)
     else camApi.centerOn(0, 0, 1)
   }

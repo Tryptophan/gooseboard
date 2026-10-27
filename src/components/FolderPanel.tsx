@@ -32,18 +32,18 @@ export function FolderPanel() {
 // ---------- dragging out of the panel ----------
 
 /**
- * Pointer-driven (not HTML5 drag and drop, which the canvas already uses for OS files):
- * tiles drag onto a folder tile, a breadcrumb, a folder on the canvas or the canvas itself.
+ * Pointer-driven (not HTML5 drag and drop, which the board already uses for OS files):
+ * tiles drag onto a folder tile, a breadcrumb, a folder on the board or the board itself.
  * Folder tiles and breadcrumbs carry data-drop="<folder id>".
  */
 type Payload = { kind: 'item'; item: Item; label: string } | { kind: 'entry'; folder: FolderItem; entry: DirEntry; path: string; label: string }
 
-type Target = { folder: string } | { canvas: Vec } | null
+type Target = { folder: string } | { surface: Vec } | null
 
 type StartDrag = (e: RPointerEvent, p: Payload) => void
 
-function canvasPoint(x: number, y: number, cam: ReturnType<typeof useCamera>): Vec | null {
-  const host = document.querySelector<HTMLElement>('[data-canvas]')
+function surfacePoint(x: number, y: number, cam: ReturnType<typeof useCamera>): Vec | null {
+  const host = document.querySelector<HTMLElement>('[data-board-surface]')
   if (!host) return null
   const r = host.getBoundingClientRect()
   return cam.screenToWorld(x - r.left, y - r.top)
@@ -54,14 +54,14 @@ function useDrag(session: Session, cam: ReturnType<typeof useCamera>) {
   const dispatch = useUiDispatch()
   const [ghost, setGhost] = useState<{ x: number; y: number; label: string } | null>(null)
   const [hover, setHover] = useState<string | null>(null)
-  const canvasHover = useRef<HTMLElement | null>(null)
+  const surfaceHover = useRef<HTMLElement | null>(null)
 
   const targetAt = useCallback(
     (x: number, y: number, p: Payload): { target: Target; key: string | null; el?: HTMLElement } => {
       const els = document.elementsFromPoint(x, y) as HTMLElement[]
       const drop = els.map((el) => el.closest<HTMLElement>('[data-drop]')).find(Boolean)
       const own = p.kind === 'item' ? p.item.id : null
-      // ink only lives on the canvas
+      // ink only lives on the board
       const ink = p.kind === 'item' && p.item.type === 'stroke'
       if (drop) {
         if (ink) return { target: null, key: null }
@@ -73,9 +73,9 @@ function useDrag(session: Session, cam: ReturnType<typeof useCamera>) {
       const itemEl = els.map((el) => el.closest<HTMLElement>('[data-item-id]')).find(Boolean)
       const it = itemEl ? store.getSnapshot().all.get(itemEl.dataset.itemId!) : undefined
       if (it?.type === 'folder' && it.mode === 'virtual' && it.id !== own && !ink) return { target: { folder: it.id }, key: it.id, el: itemEl! }
-      if (!els.some((el) => el.closest('[data-canvas]'))) return { target: null, key: null }
-      const wp = canvasPoint(x, y, cam)
-      return wp ? { target: { canvas: wp }, key: null } : { target: null, key: null }
+      if (!els.some((el) => el.closest('[data-board-surface]'))) return { target: null, key: null }
+      const wp = surfacePoint(x, y, cam)
+      return wp ? { target: { surface: wp }, key: null } : { target: null, key: null }
     },
     [store, cam],
   )
@@ -97,12 +97,12 @@ function useDrag(session: Session, cam: ReturnType<typeof useCamera>) {
           toast(`Moved “${p.label}” into “${folderName(t.folder)}”`)
         } else {
           store.undo.stopCapturing()
-          store.update(it.id, { parent: null, x: Math.round(t.canvas.x - it.w / 2), y: Math.round(t.canvas.y - it.h / 2) })
+          store.update(it.id, { parent: null, x: Math.round(t.surface.x - it.w / 2), y: Math.round(t.surface.y - it.h / 2) })
           dispatch({ type: 'select', ids: [it.id] })
         }
         return
       }
-      const ids = await copyEntryOut(session, p.folder, p.entry, p.path, 'folder' in t ? { x: 0, y: 0 } : t.canvas, 'folder' in t ? t.folder : null)
+      const ids = await copyEntryOut(session, p.folder, p.entry, p.path, 'folder' in t ? { x: 0, y: 0 } : t.surface, 'folder' in t ? t.folder : null)
       if (!ids) return
       if ('folder' in t) toast(`Copied “${p.entry.name}” into “${folderName(t.folder)}”`)
       else dispatch({ type: 'select', ids })
@@ -110,11 +110,11 @@ function useDrag(session: Session, cam: ReturnType<typeof useCamera>) {
     [session, store, dispatch],
   )
 
-  const setCanvasHover = (el: HTMLElement | null) => {
-    if (canvasHover.current === el) return
-    canvasHover.current?.removeAttribute('data-drop-hover')
+  const setSurfaceHover = (el: HTMLElement | null) => {
+    if (surfaceHover.current === el) return
+    surfaceHover.current?.removeAttribute('data-drop-hover')
     el?.setAttribute('data-drop-hover', '')
-    canvasHover.current = el
+    surfaceHover.current = el
   }
 
   const start: StartDrag = (e, p) => {
@@ -128,7 +128,7 @@ function useDrag(session: Session, cam: ReturnType<typeof useCamera>) {
       setGhost({ x: ev.clientX, y: ev.clientY, label: p.label })
       const t = targetAt(ev.clientX, ev.clientY, p)
       setHover(t.key)
-      setCanvasHover(t.el ?? null)
+      setSurfaceHover(t.el ?? null)
     }
     const end = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', move)
@@ -136,7 +136,7 @@ function useDrag(session: Session, cam: ReturnType<typeof useCamera>) {
       window.removeEventListener('pointercancel', end)
       setGhost(null)
       setHover(null)
-      setCanvasHover(null)
+      setSurfaceHover(null)
       if (dragging && ev.type === 'pointerup') void drop(p, targetAt(ev.clientX, ev.clientY, p).target)
     }
     window.addEventListener('pointermove', move)
@@ -209,7 +209,7 @@ function Shell({ folder }: { folder: FolderItem }) {
     >
       <header>
         <nav className={s.crumbs} aria-label="Folder path">
-          <button className={s.back} onClick={back} title={path.length || parent ? 'Back' : 'Back to the canvas'} aria-label="Back">
+          <button className={s.back} onClick={back} title={path.length || parent ? 'Back' : 'Back to the board'} aria-label="Back">
             <Icon name="up" size={15} />
           </button>
           {/* the outermost folder is the root of the path */}
@@ -340,7 +340,7 @@ function VirtualBody({ folder, drag, hover }: { folder: FolderItem; drag: StartD
         </button>
       </div>
       {kids.length === 0 ? (
-        <p className={s.hint}>Empty. Drop files here, or drag items from the canvas onto the folder.</p>
+        <p className={s.hint}>Empty. Drop files here, or drag items from the board onto the folder.</p>
       ) : (
         <>
           <div className={s.grid}>
@@ -361,7 +361,7 @@ function VirtualBody({ folder, drag, hover }: { folder: FolderItem; drag: StartD
               />
             ))}
           </div>
-          <p className={s.hint}>Double-click to open. Drag onto the canvas, a folder or the path above to move.</p>
+          <p className={s.hint}>Double-click to open. Drag onto the board, a folder or the path above to move.</p>
         </>
       )}
     </div>
@@ -434,7 +434,7 @@ function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, on
       onDoubleClick={(e) => !(e.target as HTMLElement).closest('button, a') && open()}
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget) return
-        // handled here, not by the canvas shortcuts underneath
+        // handled here, not by the board shortcuts underneath
         if (e.key === 'Enter') {
           e.stopPropagation()
           open()
@@ -456,7 +456,7 @@ function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, on
             },
           },
           'sep',
-          { label: 'Move onto the canvas', icon: 'up', onSelect: onOut },
+          { label: 'Move onto the board', icon: 'up', onSelect: onOut },
           'sep',
           { label: 'Delete', icon: 'trash', hint: 'Del', danger: true, onSelect: onDelete },
         ])
@@ -479,7 +479,7 @@ function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, on
         {url && (
           <a title="Open" href={url} target="_blank" rel="noopener noreferrer"><Icon name="link" size={14} /></a>
         )}
-        <button title="Move onto the canvas" onClick={onOut}><Icon name="up" size={14} /></button>
+        <button title="Move onto the board" onClick={onOut}><Icon name="up" size={14} /></button>
         <button title="Delete" onClick={onDelete}><Icon name="trash" size={14} /></button>
       </div>
     </div>
@@ -550,7 +550,7 @@ function DiskBody({ folder, path, setPath, drag }: { folder: FolderItem; path: s
               />
             ))}
           </div>
-          <p className={s.hint}>Double-click to open. Drag a file onto the canvas or a folder to add a copy.</p>
+          <p className={s.hint}>Double-click to open. Drag a file onto the board or a folder to add a copy.</p>
         </>
       )}
     </div>
@@ -626,7 +626,7 @@ function Entry({ folder, entry, path, selected, onSelect, drag, onOpen }: EntryP
           { label: !isFile ? 'Open' : canPrev ? 'Preview' : 'Download', icon: !isFile ? 'folder' : canPrev ? 'eye' : 'download', hint: 'Enter', onSelect: open },
           canPrev && { label: 'Download', icon: 'download', onSelect: () => void files.download(args) },
           isFile && 'sep',
-          isFile && { label: 'Copy onto the canvas', icon: 'copy', onSelect: () => void copyOut() },
+          isFile && { label: 'Copy onto the board', icon: 'copy', onSelect: () => void copyOut() },
         ])
       }}
     >
@@ -649,7 +649,7 @@ function Entry({ folder, entry, path, selected, onSelect, drag, onOpen }: EntryP
           <button title="Download" onClick={() => void files.download(args)}>
             <Icon name="download" size={14} />
           </button>
-          <button title="Copy onto the canvas" onClick={() => void copyOut()}>
+          <button title="Copy onto the board" onClick={() => void copyOut()}>
             <Icon name="copy" size={14} />
           </button>
         </div>

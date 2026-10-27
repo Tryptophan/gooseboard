@@ -88,7 +88,7 @@ function DialogBox({ req }: { req: Req }) {
       className={s.backdrop}
       data-nodrag
       onPointerDown={(e) => e.target === e.currentTarget && close(false)}
-      // keep canvas shortcuts (Delete, Escape, tools...) from firing underneath
+      // keep board shortcuts (Delete, Escape, tools...) from firing underneath
       onKeyDown={(e) => {
         e.stopPropagation()
         if (e.key === 'Escape') close(false)

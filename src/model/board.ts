@@ -14,8 +14,8 @@ export const LOCAL = 'gooseboard-local'
 export interface Snapshot {
   /** every item, including ones inside folders */
   all: Map<string, Item>
-  /** items drawn on the canvas, back to front */
-  canvas: Item[]
+  /** items drawn on the board, back to front */
+  surface: Item[]
   /** folder id -> contained items (by z) */
   children: Map<string, Item[]>
   version: number
@@ -48,7 +48,7 @@ export class BoardStore {
   readonly awareness
   loaded = false
 
-  private snap: Snapshot = { all: new Map(), canvas: [], children: new Map(), version: 0 }
+  private snap: Snapshot = { all: new Map(), surface: [], children: new Map(), version: 0 }
   private listeners = new Set<Listener>()
   private loadListeners = new Set<Listener>()
 
@@ -102,7 +102,7 @@ export class BoardStore {
       if (ev.path.length === 0) {
         ev.changes.keys.forEach((_c, key) => dirty.add(key))
       } else {
-        // path[1] === 'content' is note text: rendered by the note itself, no canvas change
+        // path[1] === 'content' is note text: rendered by the note itself, no board change
         if (ev.path.length >= 2 && ev.path[1] === 'content') continue
         dirty.add(String(ev.path[0]))
       }
@@ -116,18 +116,18 @@ export class BoardStore {
       const prev = this.snap.all.get(id)
       all.set(id, !dirty || dirty.has(id) || !prev ? readItem(id, m) : prev)
     })
-    const canvas: Item[] = []
+    const surface: Item[] = []
     const children = new Map<string, Item[]>()
     for (const it of all.values()) {
       if (it.parent && all.has(it.parent)) {
         const list = children.get(it.parent) ?? []
         list.push(it)
         children.set(it.parent, list)
-      } else canvas.push(it)
+      } else surface.push(it)
     }
-    canvas.sort((a, b) => a.z - b.z)
+    surface.sort((a, b) => a.z - b.z)
     children.forEach((l) => l.sort((a, b) => a.z - b.z))
-    this.snap = { all, canvas, children, version: this.snap.version + 1 }
+    this.snap = { all, surface, children, version: this.snap.version + 1 }
     this.listeners.forEach((l) => l())
   }
 
@@ -199,7 +199,7 @@ export class BoardStore {
     this.transact(() => doomed.forEach((id) => this.items.delete(id)))
   }
 
-  /** Moves items into `parent`; ink strokes only live on the canvas, so they never go into a folder. Returns the ids moved. */
+  /** Moves items into `parent`; ink strokes only live on the board, so they never go into a folder. Returns the ids moved. */
   reparent(ids: string[], parent: string | null): string[] {
     const patches: Record<string, Record<string, any>> = {}
     for (const id of ids) {

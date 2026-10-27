@@ -91,7 +91,7 @@ function Menu({ open }: { open: Open }) {
       data-nodrag
       onContextMenu={(e) => e.preventDefault()}
       onKeyDown={(e) => {
-        // keep canvas shortcuts from firing while the menu is open
+        // keep board shortcuts from firing while the menu is open
         e.stopPropagation()
         if (e.key === 'Escape') closeMenu()
         else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {

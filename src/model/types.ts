@@ -10,7 +10,7 @@ export interface ItemBase {
   /** radians */
   rot: number
   z: number
-  /** id of the containing folder, or null for the canvas */
+  /** id of the containing folder, or null for the board */
   parent: string | null
 }
 
@@ -50,7 +50,7 @@ export interface FileItem extends ItemBase {
 export interface FolderItem extends ItemBase {
   type: 'folder'
   name: string
-  /** virtual: groups canvas items. disk: a real directory served by `owner`. */
+  /** virtual: groups board items. disk: a real directory served by `owner`. */
   mode: 'virtual' | 'disk'
   owner: string
   ownerName: string

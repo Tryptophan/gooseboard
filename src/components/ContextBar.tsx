@@ -5,7 +5,7 @@ import { useSession } from '../state/session'
 import { useUiDispatch } from '../state/ui'
 import { ColorPicker } from './ColorPicker'
 import { Icon } from './Icons'
-import s from './Canvas.module.css'
+import s from './BoardSurface.module.css'
 
 /** Floating actions above the current selection. */
 export function ContextBar({ items }: { items: Item[] }) {

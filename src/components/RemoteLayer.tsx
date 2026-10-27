@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { strokePath } from '../lib/stroke'
 import type { Presence } from '../model/types'
 import { useSession } from '../state/session'
-import s from './Canvas.module.css'
+import s from './BoardSurface.module.css'
 
 interface Remote {
   clientId: number

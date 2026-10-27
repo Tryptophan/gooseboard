@@ -16,11 +16,11 @@ export function Minimap() {
 
   const view = { x: -cam.x / cam.z, y: -cam.y / cam.z, w: size.w / cam.z, h: size.h / cam.z }
   const world = useMemo(() => {
-    const items = unionBounds(snap.canvas)
+    const items = unionBounds(snap.surface)
     const u = items ? { x1: Math.min(items.x, view.x), y1: Math.min(items.y, view.y), x2: Math.max(items.x + items.w, view.x + view.w), y2: Math.max(items.y + items.h, view.y + view.h) } : { x1: view.x, y1: view.y, x2: view.x + view.w, y2: view.y + view.h }
     const pad = Math.max(u.x2 - u.x1, u.y2 - u.y1) * 0.08
     return { x: u.x1 - pad, y: u.y1 - pad, w: u.x2 - u.x1 + pad * 2, h: u.y2 - u.y1 + pad * 2 }
-  }, [snap.canvas, view.x, view.y, view.w, view.h])
+  }, [snap.surface, view.x, view.y, view.w, view.h])
 
   const k = Math.min(W / world.w, H / world.h)
   const ox = (W - world.w * k) / 2
@@ -45,7 +45,7 @@ export function Minimap() {
       onPointerUp={() => (drag.current = false)}
       data-nodrag
     >
-      {snap.canvas.map((it) => {
+      {snap.surface.map((it) => {
         const b = bounds(it)
         return <rect key={it.id} x={ox + (b.x - world.x) * k} y={oy + (b.y - world.y) * k} width={Math.max(1.5, b.w * k)} height={Math.max(1.5, b.h * k)} fill={it.type === 'note' ? it.color : (COLORS[it.type] ?? '#888')} opacity={0.85} rx={1} />
       })}

@@ -1,6 +1,6 @@
 import type { Item } from '../model/types'
 import { unionBounds } from '../lib/geometry'
-import s from './Canvas.module.css'
+import s from './BoardSurface.module.css'
 
 const HANDLES = [
   { id: 'nw', x: 0, y: 0, cur: 'nwse-resize' },

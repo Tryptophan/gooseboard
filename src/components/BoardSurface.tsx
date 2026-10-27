@@ -19,7 +19,7 @@ import { canPreview, usePreview } from './Preview'
 import { ItemView } from './Items'
 import { RemoteLayer } from './RemoteLayer'
 import { SelectionOverlay } from './SelectionOverlay'
-import s from './Canvas.module.css'
+import s from './BoardSurface.module.css'
 
 type Inter =
   | { kind: 'pan'; sx: number; sy: number; cam: Cam }
@@ -34,7 +34,7 @@ type Inter =
 const CLIP_PREFIX = 'GOOSEBOARD:'
 const isTyping = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"], .ProseMirror')
 
-export function Canvas() {
+export function BoardSurface() {
   const session = useSession()
   const { store, profile } = session
   const snap = useSnapshot()
@@ -85,7 +85,7 @@ export function Canvas() {
   )
 
   const selItems = useMemo(
-    () => ui.selection.map((id) => snap.all.get(id)).filter((i): i is Item => !!i && snap.canvas.includes(i)),
+    () => ui.selection.map((id) => snap.all.get(id)).filter((i): i is Item => !!i && snap.surface.includes(i)),
     [ui.selection, snap],
   )
 
@@ -178,7 +178,7 @@ export function Canvas() {
     (wp: Vec) => {
       const z = camApi.camRef.current.z
       const hits: string[] = []
-      for (const it of snapRef.current.canvas) {
+      for (const it of snapRef.current.surface) {
         if (it.type !== 'stroke') continue
         const b = bounds(it)
         if (!rectsIntersect({ x: wp.x - 20, y: wp.y - 20, w: 40, h: 40 }, b)) continue
@@ -374,10 +374,10 @@ export function Canvas() {
         store.updateMany(patches)
         let target: string | null = null
         const all = snapRef.current
-        // ink stays on the canvas, so a strokes-only selection has nowhere to drop
+        // ink stays on the board, so a strokes-only selection has nowhere to drop
         const inkOnly = it.ids.every((id) => all.all.get(id)?.type === 'stroke')
-        for (let i = inkOnly ? -1 : all.canvas.length - 1; i >= 0; i--) {
-          const c = all.canvas[i]
+        for (let i = inkOnly ? -1 : all.surface.length - 1; i >= 0; i--) {
+          const c = all.surface[i]
           if (c.type === 'folder' && c.mode === 'virtual' && !it.ids.includes(c.id) && pointInItem(c, wp)) {
             target = c.id
             break
@@ -389,7 +389,7 @@ export function Canvas() {
       case 'marquee': {
         const r = { x: Math.min(it.start.x, wp.x), y: Math.min(it.start.y, wp.y), w: Math.abs(wp.x - it.start.x), h: Math.abs(wp.y - it.start.y) }
         setMarquee(r)
-        const hit = snapRef.current.canvas.filter((c) => rectsIntersect(r, bounds(c))).map((c) => c.id)
+        const hit = snapRef.current.surface.filter((c) => rectsIntersect(r, bounds(c))).map((c) => c.id)
         const next = [...new Set([...it.base, ...hit])]
         const cur = uiRef.current.selection
         if (next.length !== cur.length || next.some((id, i) => id !== cur[i])) dispatch({ type: 'select', ids: next })
@@ -466,7 +466,7 @@ export function Canvas() {
           dispatch({ type: 'select', ids: left })
           toast(
             `Moved ${moved.length} item${moved.length === 1 ? '' : 's'} into “${folder && folder.type === 'folder' ? folder.name : 'folder'}”` +
-              (left.length ? '. Ink stays on the canvas' : ''),
+              (left.length ? '. Ink stays on the board' : ''),
           )
         }
         setDropTarget(null)
@@ -619,14 +619,14 @@ export function Canvas() {
         },
       },
       'sep',
-      { label: 'Select all', icon: 'select', hint: 'Ctrl+A', onSelect: () => dispatch({ type: 'select', ids: snapRef.current.canvas.map((i) => i.id) }) },
+      { label: 'Select all', icon: 'select', hint: 'Ctrl+A', onSelect: () => dispatch({ type: 'select', ids: snapRef.current.surface.map((i) => i.id) }) },
       {
         label: 'Zoom to fit',
         icon: 'fit',
         hint: 'Shift+1',
-        disabled: !snapRef.current.canvas.length,
+        disabled: !snapRef.current.surface.length,
         onSelect: () => {
-          const b = unionBounds(snapRef.current.canvas)
+          const b = unionBounds(snapRef.current.surface)
           if (b) camApi.fitRect(b)
         },
       },
@@ -662,8 +662,8 @@ export function Canvas() {
     const items = await pending
     if (!items.length) return
     let parent: string | null = null
-    for (let i = snapRef.current.canvas.length - 1; i >= 0; i--) {
-      const c = snapRef.current.canvas[i]
+    for (let i = snapRef.current.surface.length - 1; i >= 0; i--) {
+      const c = snapRef.current.surface[i]
       if (c.type === 'folder' && c.mode === 'virtual' && pointInItem(c, wp)) {
         parent = c.id
         break
@@ -800,7 +800,7 @@ export function Canvas() {
           dispatch({ type: 'select', ids: store.duplicate(sel) })
         } else if (k === 'a') {
           e.preventDefault()
-          dispatch({ type: 'select', ids: snapRef.current.canvas.map((i) => i.id) })
+          dispatch({ type: 'select', ids: snapRef.current.surface.map((i) => i.id) })
         } else if (k === '0') {
           e.preventDefault()
           camApi.zoomTo(1)
@@ -838,7 +838,7 @@ export function Canvas() {
       if (e.key === ']' && sel.length) return store.bringToFront(sel)
       if (e.key === '[' && sel.length) return store.sendToBack(sel)
       if (e.shiftKey && e.key === '!') {
-        const b = unionBounds(snapRef.current.canvas)
+        const b = unionBounds(snapRef.current.surface)
         if (b) camApi.fitRect(b)
         return
       }
@@ -890,7 +890,7 @@ export function Canvas() {
   return (
     <div
       ref={hostRef}
-      data-canvas
+      data-board-surface
       className={`${s.host} ${cursorClass} ${cam.z < 0.35 ? s.noGrid : ''}`}
       style={hostStyle}
       onPointerDown={onPointerDown}
@@ -909,7 +909,7 @@ export function Canvas() {
       onContextMenu={onContextMenu}
     >
       <div className={s.world} style={{ transform: `translate(${cam.x}px, ${cam.y}px) scale(${cam.z})` }}>
-        {snap.canvas.map((item) => (
+        {snap.surface.map((item) => (
           <ItemView
             key={item.id}
             item={item}
@@ -929,7 +929,7 @@ export function Canvas() {
         {marquee && <div className={s.marquee} style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />}
       </div>
       {selItems.length > 0 && !moving && ui.tool === 'select' && <ContextBar items={selItems} />}
-      {snap.canvas.length === 0 && ui.tool === 'select' && (
+      {snap.surface.length === 0 && ui.tool === 'select' && (
         <div className={s.empty}>
           <b>An empty board.</b>
           <span>Double-click to add a note · drop files here · press P to draw · share the link to invite people</span>

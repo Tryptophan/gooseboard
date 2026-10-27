@@ -88,9 +88,9 @@ async function thumbFor(file: File): Promise<string | undefined> {
   return b && b.size <= 60_000 ? blobToDataURL(b) : undefined
 }
 
-/** Nearest spot to `at` (spiralling outwards) where a w x h card overlaps no existing canvas card. */
+/** Nearest spot to `at` (spiralling outwards) where a w x h card overlaps no existing board card. */
 function freeSpot(s: Session, at: Vec, w: number, h: number): Vec {
-  const cards = s.store.getSnapshot().canvas.filter((i) => i.type !== 'stroke').map(bounds)
+  const cards = s.store.getSnapshot().surface.filter((i) => i.type !== 'stroke').map(bounds)
   const gap = 24
   for (let ring = 0; ring < 12; ring++) {
     for (let dy = -ring; dy <= ring; dy++) {
