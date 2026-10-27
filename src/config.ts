@@ -16,11 +16,16 @@ const fromEnv = (import.meta.env.VITE_SIGNALING_URLS as string | undefined)
 
 export const SIGNALING_URLS: string[] = fromEnv && fromEnv.length ? fromEnv : DEFAULT_SIGNALING
 
-/** STUN only (no TURN): some strict NATs will fail to connect. */
+/**
+ * STUN only (no TURN): some strict NATs will fail to connect.
+ * Google primary, backups spread across providers. Kept at 4: browsers
+ * warn that 5+ ICE servers slows candidate gathering.
+ */
 export const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
 ]
 
 export const ROOM_PREFIX = 'gooseboard:'
