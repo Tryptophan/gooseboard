@@ -548,7 +548,16 @@ export function Canvas() {
       } else toast(`Copied ${ids.length} item${ids.length === 1 ? '' : 's'}`)
     }
 
+    // Linux primary-selection paste fires on middle-button release; middle button pans here.
+    let middleAt = 0
+    const onMiddle = (e: MouseEvent) => {
+      if (e.button !== 1) return
+      middleAt = performance.now()
+      if (e.type !== 'mousedown' && e.type !== 'pointerdown') e.preventDefault()
+    }
+
     const onPaste = async (e: ClipboardEvent) => {
+      if (performance.now() - middleAt < 500) return e.preventDefault()
       if (isTyping(e.target)) return
       const cd = e.clipboardData
       if (!cd) return
@@ -685,7 +694,9 @@ export function Canvas() {
     document.addEventListener('copy', copy)
     document.addEventListener('cut', cut)
     document.addEventListener('paste', onPaste)
+    for (const t of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'auxclick'] as const) window.addEventListener(t, onMiddle, true)
     return () => {
+      for (const t of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'auxclick'] as const) window.removeEventListener(t, onMiddle, true)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       document.removeEventListener('copy', copy)
