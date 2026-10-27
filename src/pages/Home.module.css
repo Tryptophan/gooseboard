@@ -35,7 +35,16 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .profile p { color: var(--muted); margin: 0 0 10px; }
 .profileRow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .profileRow input { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); min-width: 200px; }
+.me { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; flex: none; }
 .sw { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--border); cursor: pointer; padding: 0; }
 .swOn { box-shadow: 0 0 0 2px var(--accent); }
 .foot { margin-top: 40px; color: var(--muted); font-size: 12.5px; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 16px; }
 .source { margin: 10px 0 0; }
+
+/* phones: the board's name and presence get the whole first line, its actions wrap below on the right */
+@media (max-width: 560px) {
+  .page { padding: 24px 16px 48px; }
+  .list li { flex-wrap: wrap; justify-content: flex-end; }
+  .list .open { flex-basis: 100%; }
+  .online { flex-basis: 50%; }
+}

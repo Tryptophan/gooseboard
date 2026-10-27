@@ -26,7 +26,16 @@ export function useBudget(ref: RefObject<HTMLElement>, fraction: number): number
   return w * fraction
 }
 
-export const initial = (name: string) => name.slice(0, 1).toUpperCase() || '?'
+/** The logo's goose, drawn over the user's colour; the beak is a darker shade of it so it shows on every colour. */
+export function Goose({ color }: { color: string }) {
+  return (
+    <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden>
+      <path d="M22 70V23a9 9 0 0 1 9-9c4 0 7 2 9 4l11 5.5c1 .5 1 1.5 0 2L40 29v41z" fill="#fff" />
+      <path d="M40 18l11 5.5c1 .5 1 1.5 0 2L40 29z" style={{ fill: `color-mix(in srgb, ${color} 55%, black)` }} />
+      <circle cx="32" cy="21.5" r="2.2" fill="#1b2a4a" />
+    </svg>
+  )
+}
 
 export function MoreChip({ hidden, onClick, children }: { hidden: string[]; onClick?: () => void; children?: ReactNode }) {
   return (
@@ -44,7 +53,7 @@ export function AvatarStack({ users, budget }: { users: PresenceUser[]; budget: 
     <span className={s.avatars}>
       {users.slice(0, n).map((u) => (
         <span key={u.id} className={`${s.avatar} ${s.static}`} style={{ background: u.color }} title={u.name}>
-          {initial(u.name)}
+          <Goose color={u.color} />
         </span>
       ))}
       {hidden.length > 0 && (

@@ -6,7 +6,7 @@ import { signalStatus } from '../net/signal'
 import { usePeers, useSession } from '../state/session'
 import { useThemeToggle, useUi, useUiDispatch } from '../state/ui'
 import { copyDialog } from './Dialog'
-import { fitAvatars, initial, MoreChip, useBudget } from './Avatars'
+import { fitAvatars, Goose, MoreChip, useBudget } from './Avatars'
 import { Icon } from './Icons'
 import s from './Chrome.module.css'
 
@@ -155,7 +155,7 @@ export function TopBar({ boardId }: { boardId: string }) {
               title={p.isSelf ? `${p.name} (you): edit profile` : ui.follow === p.clientId ? `Following ${p.name}: click to stop` : `${p.name}: click to follow their view`}
               onClick={() => clickPeer(p)}
             >
-              {initial(p.name)}
+              <Goose color={p.color} />
             </button>
           ))}
           {shown < peers.length && <MoreChip hidden={peers.slice(shown).map((p) => p.name)} onClick={() => setShowMore(!showMore)} />}
@@ -177,7 +177,7 @@ export function TopBar({ boardId }: { boardId: string }) {
             {peers.map((p) => (
               <li key={p.clientId}>
                 <button className={ui.follow === p.clientId ? s.following : ''} onClick={() => clickPeer(p)}>
-                  <span className={s.avatar} style={{ background: p.color }}>{initial(p.name)}</span>
+                  <span className={s.avatar} style={{ background: p.color }}><Goose color={p.color} /></span>
                   {p.name}
                   <span className={s.muted}>{p.isSelf ? 'you' : ui.follow === p.clientId ? 'following' : ''}</span>
                 </button>

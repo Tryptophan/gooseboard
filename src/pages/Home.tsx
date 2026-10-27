@@ -5,7 +5,7 @@ import { newBoardId, parseBoardRef } from '../lib/ids'
 import { forgetBoard, getBoards, getProfile, renameBoardLocal, renameBoardPending, saveProfile, touchBoard, USER_COLORS, type BoardEntry } from '../lib/storage'
 import type { PresenceUser } from '../model/types'
 import { watchPresence } from '../net/presence'
-import { AvatarStack, useBudget } from '../components/Avatars'
+import { AvatarStack, Goose, useBudget } from '../components/Avatars'
 import { confirmDialog, copyDialog, promptDialog } from '../components/Dialog'
 import { Icon } from '../components/Icons'
 import { useThemeToggle } from '../state/ui'
@@ -175,6 +175,9 @@ export default function Home() {
         <h2>You</h2>
         <p>No accounts. Your name and color live in this browser and show on your cursor.</p>
         <div className={s.profileRow}>
+          <span className={s.me} style={{ background: profile.color }} title="How you look to others">
+            <Goose color={profile.color} />
+          </span>
           <input
             value={profile.name}
             maxLength={24}
@@ -213,7 +216,7 @@ function OnlineNow({ users }: { users: PresenceUser[] }) {
     <span ref={ref} className={s.online} title={users.length ? `${users.length} on this board now` : undefined}>
       {users.length > 0 && (
         <>
-          <AvatarStack users={users} budget={budget - 70} />
+          {budget - 70 >= 30 && <AvatarStack users={users} budget={budget - 70} />}
           <span className={s.onlineCount}>
             <i /> {users.length} online
           </span>
