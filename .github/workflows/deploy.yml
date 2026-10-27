@@ -29,8 +29,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
         env:
-          # Project site => served from /<repo>/. Use "/" for a custom domain.
-          VITE_BASE: /${{ github.event.repository.name }}/
+          # Custom domain (gooseboard.io) => served from the root.
+          VITE_BASE: /
       - uses: actions/upload-pages-artifact@v3
         if: github.ref == 'refs/heads/main'
         with:

@@ -16,7 +16,7 @@ Peer-to-peer infinite canvas: notes (rich text/markdown), freehand ink, files, f
 Signaling only introduces peers, and there is no server to run. y-webrtc's signaling (topic pub/sub) is carried over public **Nostr relays** (ephemeral events) and **WebTorrent trackers** (the opaque offer payload) at the same time; see `src/net/signal/` and the lists in `src/config.ts`. Topics are hashed and every handshake is encrypted with the board id (y-webrtc room password), so relays see only ciphertext and people without the link can't join. Any one relay or tracker being down is fine. There is no TURN: strict NATs may fail to connect.
 
 ## Deploy
-`.github/workflows/deploy.yml` lints, typechecks and builds on every push/PR, and deploys `main` to GitHub Pages (base `/<repo>/`). Enable Pages > Source: GitHub Actions.
+`.github/workflows/deploy.yml` lints, typechecks and builds on every push/PR, and deploys `main` to GitHub Pages at https://gooseboard.io (base `/`). Enable Pages > Source: GitHub Actions and set the custom domain to `gooseboard.io`.
 
 ## License
 [AGPL-3.0-or-later](LICENSE). If you run a modified version for others to use over a network, you must offer them its source.
