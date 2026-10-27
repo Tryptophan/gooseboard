@@ -8,7 +8,7 @@ import { normalizeUrl } from '../lib/url'
 import { addDropItems, pickFiles, readDrop } from '../model/actions'
 import type { ExportedItem } from '../model/board'
 import { jsonToFragment } from '../model/noteSchema'
-import { DEFAULT_SIZE, FOLDER_COLORS, NOTE_COLORS, type Item, type Presence, type StrokeItem } from '../model/types'
+import { DEFAULT_SIZE, FOLDER_COLORS, NOTE_COLORS, type FileItem, type Item, type Presence, type StrokeItem } from '../model/types'
 import { useCamera, type Cam } from '../state/camera'
 import { useSession, useSnapshot } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
@@ -488,6 +488,13 @@ export function BoardSurface() {
     }
   }
 
+  const previewIfPossible = useCallback(
+    (it: FileItem) => {
+      if (canPreview(it.name, it.mime, it.size)) preview(fileArgsOf(it))
+    },
+    [preview],
+  )
+
   const onDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const t = e.target as HTMLElement
     if (t.closest('button, input, a, textarea, [data-nodrag], .ProseMirror')) return
@@ -502,6 +509,7 @@ export function BoardSurface() {
       if (!it) return
       if (it.type === 'note') dispatch({ type: 'editing', id })
       else if (it.type === 'folder') dispatch({ type: 'folder', id })
+      else if (it.type === 'file') previewIfPossible(it)
       return
     }
     if (u.tool === 'select') {
@@ -524,10 +532,7 @@ export function BoardSurface() {
       const sel = uiRef.current.selection.includes(it.id) ? uiRef.current.selection : [it.id]
       if (sel !== uiRef.current.selection) dispatch({ type: 'select', ids: sel })
       const only = sel.length === 1 ? it : null
-      const fileArgs =
-        only?.type === 'file'
-          ? { ownerId: only.owner, ownerName: only.ownerName, req: { op: 'file', kind: 'file', key: only.key, hash: only.hash } as const, name: only.name, size: only.size, mime: only.mime }
-          : null
+      const fileArgs = only?.type === 'file' ? fileArgsOf(only) : null
       const url = only?.type === 'link' ? normalizeUrl(only.url) : null
       const entries: (MenuEntry | false | null | undefined)[] = [
         only?.type === 'note' && { label: 'Edit text', icon: 'note', hint: 'Enter', onSelect: () => dispatch({ type: 'editing', id: only.id }) },
@@ -540,7 +545,7 @@ export function BoardSurface() {
             if (n) store.update(only.id, { name: n })
           },
         },
-        fileArgs && canPreview(fileArgs.name, fileArgs.mime, fileArgs.size) && { label: 'Preview', icon: 'eye', onSelect: () => preview(fileArgs) },
+        fileArgs && canPreview(fileArgs.name, fileArgs.mime, fileArgs.size) && { label: 'Preview', icon: 'eye', hint: 'Enter', onSelect: () => preview(fileArgs) },
         fileArgs && { label: 'Download', icon: 'download', onSelect: () => void session.files.download(fileArgs) },
         !!url && { label: 'Open link', icon: 'link', onSelect: () => void window.open(url, '_blank', 'noopener,noreferrer') },
         only?.type === 'link' && {
@@ -824,6 +829,7 @@ export function BoardSurface() {
         const it = snapRef.current.all.get(sel[0])
         if (it?.type === 'note') dispatch(e.shiftKey ? { type: 'noteModal', id: it.id } : { type: 'editing', id: it.id })
         else if (it?.type === 'folder') dispatch({ type: 'folder', id: it.id })
+        else if (it?.type === 'file') previewIfPossible(it)
         e.preventDefault()
         return
       }
@@ -873,7 +879,7 @@ export function BoardSurface() {
       document.removeEventListener('cut', cut)
       document.removeEventListener('paste', onPaste)
     }
-  }, [store, camApi, dispatch, session, placeItem, pasteText, clipText, afterCopy])
+  }, [store, camApi, dispatch, session, placeItem, pasteText, clipText, afterCopy, previewIfPossible])
 
   const cursorClass =
     spaceDown || ui.tool === 'hand' ? s.grab : ui.tool === 'pen' || ui.tool === 'highlighter' || ui.tool === 'eraser' ? s.crosshair : ui.tool === 'select' ? '' : s.place
@@ -939,3 +945,12 @@ export function BoardSurface() {
   )
 }
 
+
+const fileArgsOf = (it: FileItem) => ({
+  ownerId: it.owner,
+  ownerName: it.ownerName,
+  req: { op: 'file', kind: 'file', key: it.key, hash: it.hash } as const,
+  name: it.name,
+  size: it.size,
+  mime: it.mime,
+})
