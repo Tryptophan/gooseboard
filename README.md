@@ -19,4 +19,4 @@ Signaling only introduces peers, and there is no server to run. y-webrtc's signa
 `.github/workflows/deploy.yml` lints, typechecks and builds on every push/PR, and deploys `main` to GitHub Pages at https://gooseboard.io (base `/`). Enable Pages > Source: GitHub Actions and set the custom domain to `gooseboard.io`.
 
 ## License
-[AGPL-3.0-or-later](LICENSE). If you run a modified version for others to use over a network, you must offer them its source.
+[MIT](LICENSE).
