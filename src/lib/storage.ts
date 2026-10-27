@@ -42,7 +42,7 @@ function write(key: string, value: unknown) {
 }
 
 export const USER_COLORS = ['#e5484d', '#f76b15', '#d9a400', '#30a46c', '#0fa5a5', '#3e63dd', '#8e4ec6', '#d6409f']
-const ADJ = ['Brave', 'Sneaky', 'Fluffy', 'Honking', 'Grumpy', 'Plucky', 'Mighty', 'Sleepy', 'Cheeky', 'Noble']
+const ADJ = ['Brave', 'Sneaky', 'Fluffy', 'Honking', 'Grumpy', 'Plucky', 'Mighty', 'Sleepy', 'Cheeky', 'Noble', 'Golden', 'Silly']
 const NOUN = ['Goose', 'Gander', 'Gosling', 'Honker', 'Waddler']
 
 function randomProfile(): Profile {
