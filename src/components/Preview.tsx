@@ -66,7 +66,8 @@ function PreviewModal({ args, onClose }: { args: PreviewArgs; onClose: () => voi
         if (dead) return
         if (kind === 'text' || kind === 'code') setText(await b.text())
         else {
-          urlRef.current = URL.createObjectURL(b)
+          // the peer's mime is untrusted: pin PDFs to the browser's viewer so nothing else renders in our origin
+          urlRef.current = URL.createObjectURL(kind === 'pdf' ? new Blob([b], { type: 'application/pdf' }) : b)
           setUrl(urlRef.current)
         }
       })
@@ -111,9 +112,10 @@ function PreviewModal({ args, onClose }: { args: PreviewArgs; onClose: () => voi
               <video src={url} controls autoPlay />
             ) : kind === 'audio' ? (
               <audio src={url} controls autoPlay />
-            ) : (
-              <iframe src={url} title={args.name} sandbox="" />
-            )
+            ) : kind === 'pdf' ? (
+              // no sandbox: Chrome blocks and Firefox blanks their PDF viewers inside one
+              <iframe src={url} title={args.name} />
+            ) : null
           ) : done !== null ? (
             <Progress done={done} size={args.size} note={note === 'Downloading…' ? null : note} />
           ) : (
