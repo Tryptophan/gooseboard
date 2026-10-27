@@ -62,6 +62,7 @@ export function TopBar({ boardId }: { boardId: string }) {
   const bodyRef = useRef(document.body)
   const leftRef = useRef<HTMLDivElement>(null)
   const restRef = useRef<HTMLDivElement>(null)
+  const meRef = useRef<HTMLDivElement>(null)
   const avatarBudget = useBudget(bodyRef, 1) - useBudget(leftRef, 1) - useBudget(restRef, 1) - 80
 
   // self first, so the "+N" overflow hides other people rather than your own profile button
@@ -76,6 +77,17 @@ export function TopBar({ boardId }: { boardId: string }) {
     store.setProfile(saveProfile(patch))
     session.presence.refresh()
   }
+
+  useEffect(() => {
+    if (!showMe) return
+    // the self avatar toggles the popover on its own click, so pressing it isn't "outside"
+    const h = (e: PointerEvent) => {
+      const t = e.target as Element
+      if (!meRef.current?.contains(t) && !t.closest?.('[data-me-toggle]')) setShowMe(false)
+    }
+    window.addEventListener('pointerdown', h, true)
+    return () => window.removeEventListener('pointerdown', h, true)
+  }, [showMe])
 
   const up = conn.servers.filter((x) => x.connected).length
   const others = peers.filter((p) => !p.isSelf).length
@@ -154,6 +166,7 @@ export function TopBar({ boardId }: { boardId: string }) {
               style={{ background: p.color }}
               title={p.isSelf ? `${p.name} (you): edit profile` : ui.follow === p.clientId ? `Following ${p.name}: click to stop` : `${p.name}: click to follow their view`}
               onClick={() => clickPeer(p)}
+              data-me-toggle={p.isSelf || undefined}
             >
               <Goose color={p.color} />
             </button>
@@ -176,7 +189,7 @@ export function TopBar({ boardId }: { boardId: string }) {
           <ul className={s.peerList}>
             {peers.map((p) => (
               <li key={p.clientId}>
-                <button className={ui.follow === p.clientId ? s.following : ''} onClick={() => clickPeer(p)}>
+                <button className={ui.follow === p.clientId ? s.following : ''} onClick={() => clickPeer(p)} data-me-toggle={p.isSelf || undefined}>
                   <span className={s.avatar} style={{ background: p.color }}><Goose color={p.color} /></span>
                   {p.name}
                   <span className={s.muted}>{p.isSelf ? 'you' : ui.follow === p.clientId ? 'following' : ''}</span>
@@ -188,7 +201,7 @@ export function TopBar({ boardId }: { boardId: string }) {
       )}
 
       {showMe && me && (
-        <div className={`${s.popover} ${s.mePop}`} data-nodrag>
+        <div className={`${s.popover} ${s.mePop}`} data-nodrag ref={meRef}>
           <b>Your profile</b>
           <input
             value={me.name}
