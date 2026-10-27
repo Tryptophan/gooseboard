@@ -65,8 +65,9 @@ function FolderBody({ item, childCount }: { item: FolderItem; childCount: number
         <path d="M6 30h108v48a8 8 0 01-8 8H14a8 8 0 01-8-8z" fill="#fff" opacity="0.22" />
       </svg>
       <div className={s.folderInfo}>
-        <div className={s.cardName} title={item.name}>
-          {disk && <Icon name="disk" size={13} />} {item.name}
+        <div className={`${s.cardName} ${s.folderName}`} title={item.name}>
+          {disk && <Icon name="disk" size={13} />}
+          <span>{item.name}</span>
         </div>
         <div className={s.cardMeta}>
           {disk ? (

@@ -4,7 +4,8 @@ import { bounds, clamp, distToSegment, pointInItem, rectsIntersect, rotate, snap
 import { isUrl } from '../lib/files'
 import { toast } from '../lib/toast'
 import { downsample, pointsBounds, strokePath } from '../lib/stroke'
-import { addDropItems, readDrop } from '../model/actions'
+import { normalizeUrl } from '../lib/url'
+import { addDropItems, pickFiles, readDrop } from '../model/actions'
 import type { ExportedItem } from '../model/board'
 import { jsonToFragment } from '../model/noteSchema'
 import { DEFAULT_SIZE, FOLDER_COLORS, NOTE_COLORS, type Item, type Presence, type StrokeItem } from '../model/types'
@@ -12,6 +13,9 @@ import { useCamera, type Cam } from '../state/camera'
 import { useSession, useSnapshot } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
 import { ContextBar } from './ContextBar'
+import { openMenu, type MenuEntry } from './ContextMenu'
+import { promptDialog } from './Dialog'
+import { canPreview, usePreview } from './Preview'
 import { ItemView } from './Items'
 import { RemoteLayer } from './RemoteLayer'
 import { SelectionOverlay } from './SelectionOverlay'
@@ -38,6 +42,7 @@ export function Canvas() {
   const dispatch = useUiDispatch()
   const camApi = useCamera()
   const { cam, size } = camApi
+  const preview = usePreview()
 
   const hostRef = useRef<HTMLDivElement>(null)
   const inter = useRef<Inter | null>(null)
@@ -152,7 +157,8 @@ export function Canvas() {
       if (e.ctrlKey || e.metaKey) {
         const r = el.getBoundingClientRect()
         camApi.zoomAt(Math.exp(-e.deltaY * k * 0.01), e.clientX - r.left, e.clientY - r.top)
-      } else camApi.panBy(-e.deltaX * k, -e.deltaY * k)
+      } else if (e.shiftKey && !e.deltaX) camApi.panBy(-e.deltaY * k, 0) // mouse wheels: shift scrolls sideways
+      else camApi.panBy(-e.deltaX * k, -e.deltaY * k)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
@@ -498,6 +504,148 @@ export function Canvas() {
     }
   }
 
+  // ---- right-click menu ----
+  const onContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    const t = e.target as HTMLElement
+    if (isTyping(t)) return // native menu (spellcheck, copy/paste) inside text
+    if (t.closest('[data-nodrag]') && !t.closest('[data-item-id]')) return e.preventDefault()
+    const at = toWorld(e)
+    const id =
+      t.closest<HTMLElement>('[data-item-id]')?.dataset.itemId ??
+      document.elementsFromPoint(e.clientX, e.clientY).map((el) => el.closest<HTMLElement>('[data-item-id]')).find(Boolean)?.dataset.itemId
+    const it = id ? snapRef.current.all.get(id) : undefined
+    if (it) {
+      const sel = uiRef.current.selection.includes(it.id) ? uiRef.current.selection : [it.id]
+      if (sel !== uiRef.current.selection) dispatch({ type: 'select', ids: sel })
+      const only = sel.length === 1 ? it : null
+      const fileArgs =
+        only?.type === 'file'
+          ? { ownerId: only.owner, ownerName: only.ownerName, req: { op: 'file', kind: 'file', key: only.key, hash: only.hash } as const, name: only.name, size: only.size, mime: only.mime }
+          : null
+      const url = only?.type === 'link' ? normalizeUrl(only.url) : null
+      const entries: (MenuEntry | false | null | undefined)[] = [
+        only?.type === 'note' && { label: 'Edit text', icon: 'note', hint: 'Enter', onSelect: () => dispatch({ type: 'editing', id: only.id }) },
+        only?.type === 'folder' && { label: 'Open', icon: 'folder', hint: 'Enter', onSelect: () => dispatch({ type: 'folder', id: only.id }) },
+        only?.type === 'folder' && {
+          label: 'Rename…',
+          onSelect: async () => {
+            const n = await promptDialog({ title: 'Rename folder', value: only.name, ok: 'Rename' })
+            if (n) store.update(only.id, { name: n })
+          },
+        },
+        fileArgs && canPreview(fileArgs.name, fileArgs.mime, fileArgs.size) && { label: 'Preview', icon: 'eye', onSelect: () => preview(fileArgs) },
+        fileArgs && { label: 'Download', icon: 'download', onSelect: () => void session.files.download(fileArgs) },
+        !!url && { label: 'Open link', icon: 'link', onSelect: () => void window.open(url, '_blank', 'noopener,noreferrer') },
+        only?.type === 'link' && {
+          label: 'Edit link…',
+          onSelect: async () => {
+            const n = await promptDialog({ title: 'Edit link', value: only.url, placeholder: 'https://…', ok: 'Save' })
+            const u = n && normalizeUrl(n)
+            if (u) store.update(only.id, { url: u })
+            else if (n) toast('Only http(s) links can be added')
+          },
+        },
+        'sep',
+        { label: 'Copy', icon: 'copy', hint: 'Ctrl+C', onSelect: () => void writeClip(sel, false) },
+        { label: 'Cut', hint: 'Ctrl+X', onSelect: () => void writeClip(sel, true) },
+        {
+          label: 'Duplicate',
+          hint: 'Ctrl+D',
+          onSelect: () => {
+            store.undo.stopCapturing()
+            dispatch({ type: 'select', ids: store.duplicate(sel) })
+          },
+        },
+        'sep',
+        { label: 'Bring to front', icon: 'front', hint: ']', onSelect: () => store.bringToFront(sel) },
+        { label: 'Send to back', icon: 'back', hint: '[', onSelect: () => store.sendToBack(sel) },
+        {
+          label: 'Zoom to selection',
+          icon: 'fit',
+          hint: 'Shift+2',
+          onSelect: () => {
+            const b = unionBounds(sel.flatMap((i) => snapRef.current.all.get(i) ?? []))
+            if (b) camApi.fitRect(b, 120, 2)
+          },
+        },
+        'sep',
+        {
+          label: sel.length > 1 ? `Delete ${sel.length} items` : 'Delete',
+          icon: 'trash',
+          hint: 'Del',
+          danger: true,
+          onSelect: () => {
+            store.undo.stopCapturing()
+            store.remove(sel)
+            dispatch({ type: 'select', ids: [] })
+          },
+        },
+      ]
+      return openMenu(e, entries)
+    }
+    openMenu(e, [
+      { label: 'Paste', hint: 'Ctrl+V', onSelect: () => void readClip(at) },
+      'sep',
+      {
+        label: 'Add note here',
+        icon: 'note',
+        hint: 'N',
+        onSelect: () => dispatch({ type: 'editing', id: placeItem({ type: 'note', color: NOTE_COLORS[Math.floor(Math.random() * 3)] }, at) }),
+      },
+      {
+        label: 'Add folder here',
+        icon: 'folder',
+        hint: 'F',
+        onSelect: () => {
+          const fid = placeItem({ type: 'folder', mode: 'virtual', name: 'New folder', owner: profile.id, ownerName: profile.name, color: FOLDER_COLORS[0] }, at)
+          dispatch({ type: 'select', ids: [fid] })
+          dispatch({ type: 'folder', id: fid })
+        },
+      },
+      { label: 'Add link here', icon: 'link', hint: 'K', onSelect: () => dispatch({ type: 'editing', id: placeItem({ type: 'link', url: '' }, at) }) },
+      {
+        label: 'Add files here…',
+        icon: 'file',
+        onSelect: async () => {
+          const items = await pickFiles(true)
+          if (items.length) dispatch({ type: 'select', ids: await addDropItems(session, items, at, null) })
+        },
+      },
+      'sep',
+      { label: 'Select all', icon: 'select', hint: 'Ctrl+A', onSelect: () => dispatch({ type: 'select', ids: snapRef.current.canvas.map((i) => i.id) }) },
+      {
+        label: 'Zoom to fit',
+        icon: 'fit',
+        hint: 'Shift+1',
+        disabled: !snapRef.current.canvas.length,
+        onSelect: () => {
+          const b = unionBounds(snapRef.current.canvas)
+          if (b) camApi.fitRect(b)
+        },
+      },
+    ])
+  }
+
+  const writeClip = async (ids: string[], cut: boolean) => {
+    try {
+      await navigator.clipboard.writeText(clipText(ids))
+      afterCopy(ids, cut)
+    } catch {
+      toast(`Couldn’t reach the clipboard: press Ctrl+${cut ? 'X' : 'C'} instead`)
+    }
+  }
+
+  const readClip = async (at: Vec) => {
+    let text: string
+    try {
+      text = await navigator.clipboard.readText()
+    } catch {
+      return toast('Couldn’t read the clipboard: press Ctrl+V instead')
+    }
+    if (text) pasteText(text, at)
+    else toast('Nothing to paste (files paste with Ctrl+V)')
+  }
+
   // ---- OS drag & drop ----
   const onDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     if (!e.dataTransfer.types.includes('Files')) return
@@ -519,33 +667,68 @@ export function Canvas() {
     else dispatch({ type: 'select', ids })
   }
 
+  // ---- clipboard (shared by shortcuts and the context menu) ----
+  const clipText = useCallback((ids: string[]) => CLIP_PREFIX + JSON.stringify({ v: 1, items: store.exportItems(ids) }), [store])
+
+  const afterCopy = useCallback(
+    (ids: string[], cut: boolean) => {
+      if (cut) {
+        store.undo.stopCapturing()
+        store.remove(ids)
+        dispatch({ type: 'select', ids: [] })
+      } else toast(`Copied ${ids.length} item${ids.length === 1 ? '' : 's'}`)
+    },
+    [store, dispatch],
+  )
+
+  /** Gooseboard items, a link or plain text (as a note), centred on `at`. */
+  const pasteText = useCallback(
+    (text: string, at: Vec) => {
+      if (text.startsWith(CLIP_PREFIX)) {
+        let list: ExportedItem[]
+        try {
+          list = (JSON.parse(text.slice(CLIP_PREFIX.length)) as { items: ExportedItem[] }).items
+        } catch {
+          return toast('That clipboard content isn’t valid Gooseboard data')
+        }
+        const roots = list.filter((x) => !x.props.parent || !list.some((o) => o.props.id === x.props.parent))
+        const rects = roots.map((r) => ({ x: r.props.x ?? 0, y: r.props.y ?? 0, w: r.props.w ?? 0, h: r.props.h ?? 0, rot: 0 }))
+        const b = unionBounds(rects)
+        store.undo.stopCapturing()
+        const ids = store.importItems(list, b ? at.x - (b.x + b.w / 2) : 0, b ? at.y - (b.y + b.h / 2) : 0)
+        dispatch({ type: 'select', ids })
+      } else if (isUrl(text)) {
+        store.undo.stopCapturing()
+        const sz = DEFAULT_SIZE.link
+        const id = store.add({ type: 'link', url: text.trim(), x: Math.round(at.x - sz.w / 2), y: Math.round(at.y - sz.h / 2) })
+        dispatch({ type: 'select', ids: [id] })
+      } else if (text.trim()) {
+        const id = placeItem({ type: 'note', color: NOTE_COLORS[0] }, at)
+        const f = store.noteFragment(id)
+        if (f)
+          jsonToFragment(
+            { type: 'doc', content: text.split('\n').map((line) => (line ? { type: 'paragraph', content: [{ type: 'text', text: line }] } : { type: 'paragraph' })) },
+            f,
+          )
+        dispatch({ type: 'select', ids: [id] })
+      }
+    },
+    [store, dispatch, placeItem],
+  )
+
   // ---- keyboard + clipboard ----
   useEffect(() => {
     const view = () => camApi.viewCenter()
 
     const pasteAt = () => lastWorld.current ?? view()
 
-    const pasteItems = (list: ExportedItem[]) => {
-      const roots = list.filter((x) => !x.props.parent || !list.some((o) => o.props.id === x.props.parent))
-      const rects = roots.map((r) => ({ x: r.props.x ?? 0, y: r.props.y ?? 0, w: r.props.w ?? 0, h: r.props.h ?? 0, rot: 0 }))
-      const b = unionBounds(rects)
-      const at = pasteAt()
-      store.undo.stopCapturing()
-      const ids = store.importItems(list, b ? at.x - (b.x + b.w / 2) : 0, b ? at.y - (b.y + b.h / 2) : 0)
-      dispatch({ type: 'select', ids })
-    }
-
     const onCopy = (e: ClipboardEvent, cut: boolean) => {
       if (isTyping(e.target)) return
       const ids = uiRef.current.selection
       if (!ids.length) return
-      e.clipboardData?.setData('text/plain', CLIP_PREFIX + JSON.stringify({ v: 1, items: store.exportItems(ids) }))
+      e.clipboardData?.setData('text/plain', clipText(ids))
       e.preventDefault()
-      if (cut) {
-        store.undo.stopCapturing()
-        store.remove(ids)
-        dispatch({ type: 'select', ids: [] })
-      } else toast(`Copied ${ids.length} item${ids.length === 1 ? '' : 's'}`)
+      afterCopy(ids, cut)
     }
 
     // Linux primary-selection paste fires on middle-button release; middle button pans here.
@@ -564,31 +747,10 @@ export function Canvas() {
       e.preventDefault()
       const text = cd.getData('text/plain')
       const files = Array.from(cd.files)
-      if (text.startsWith(CLIP_PREFIX)) {
-        try {
-          pasteItems((JSON.parse(text.slice(CLIP_PREFIX.length)) as { items: ExportedItem[] }).items)
-        } catch {
-          toast('That clipboard content isn’t valid Gooseboard data')
-        }
-      } else if (files.length) {
+      if (files.length && !text.startsWith(CLIP_PREFIX)) {
         const ids = await addDropItems(session, files.map((file) => ({ kind: 'file' as const, file })), pasteAt(), null, { avoidOverlap: true })
         dispatch({ type: 'select', ids })
-      } else if (isUrl(text)) {
-        store.undo.stopCapturing()
-        const sz = DEFAULT_SIZE.link
-        const at = pasteAt()
-        const id = store.add({ type: 'link', url: text.trim(), x: Math.round(at.x - sz.w / 2), y: Math.round(at.y - sz.h / 2) })
-        dispatch({ type: 'select', ids: [id] })
-      } else if (text.trim()) {
-        const id = placeItem({ type: 'note', color: NOTE_COLORS[0] }, pasteAt())
-        const f = store.noteFragment(id)
-        if (f)
-          jsonToFragment(
-            { type: 'doc', content: text.split('\n').map((line) => (line ? { type: 'paragraph', content: [{ type: 'text', text: line }] } : { type: 'paragraph' })) },
-            f,
-          )
-        dispatch({ type: 'select', ids: [id] })
-      }
+      } else pasteText(text, pasteAt())
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -703,7 +865,7 @@ export function Canvas() {
       document.removeEventListener('cut', cut)
       document.removeEventListener('paste', onPaste)
     }
-  }, [store, camApi, dispatch, session, placeItem])
+  }, [store, camApi, dispatch, session, placeItem, pasteText, clipText, afterCopy])
 
   const cursorClass =
     spaceDown || ui.tool === 'hand' ? s.grab : ui.tool === 'pen' || ui.tool === 'highlighter' || ui.tool === 'eraser' ? s.crosshair : ui.tool === 'select' ? '' : s.place
@@ -720,6 +882,7 @@ export function Canvas() {
   return (
     <div
       ref={hostRef}
+      data-canvas
       className={`${s.host} ${cursorClass} ${cam.z < 0.35 ? s.noGrid : ''}`}
       style={hostStyle}
       onPointerDown={onPointerDown}
@@ -735,7 +898,7 @@ export function Canvas() {
         }
       }}
       onDrop={onDrop}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={onContextMenu}
     >
       <div className={s.world} style={{ transform: `translate(${cam.x}px, ${cam.y}px) scale(${cam.z})` }}>
         {snap.canvas.map((item) => (

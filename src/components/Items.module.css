@@ -9,7 +9,7 @@
 .strokeSvg { overflow: visible; display: block; pointer-events: none; }
 .strokeSvg path { pointer-events: visiblePainted; cursor: pointer; }
 .selected { z-index: 0; }
-.dropTarget .folder { outline: 3px dashed var(--accent); outline-offset: 6px; border-radius: 14px; }
+.dropTarget .folder, .item[data-drop-hover] .folder { outline: 3px dashed var(--accent); outline-offset: 6px; border-radius: 14px; }
 
 .card {
   position: absolute; inset: 0; display: flex; flex-direction: column;
@@ -31,10 +31,12 @@
 .sync.unavailable { color: var(--warn); }
 .cardInfo { padding: 8px 10px; min-width: 0; flex: 0 0 auto; }
 .link .cardInfo { padding: 0; flex: 1; }
-.cardName { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px; }
+.cardName { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* flex so the disk icon sits beside the name; the name span carries the ellipsis */
+.folderName { display: flex; align-items: center; gap: 4px; }
+.folderName > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .cardMeta { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cardMeta a { overflow: hidden; text-overflow: ellipsis; }
-.owner { overflow: hidden; text-overflow: ellipsis; }
+.cardMeta a, .owner { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
 .dot.online, .dot.mine { background: var(--ok); }
 .dot.offline { background: var(--muted); }

@@ -1,0 +1,15 @@
+.backdrop { position: fixed; inset: 0; z-index: 120; background: rgba(8, 10, 16, 0.45); display: grid; place-items: center; padding: 16px; }
+.box { width: min(400px, 100%); display: flex; flex-direction: column; gap: 10px; padding: 18px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); }
+.box b { font-size: 15px; }
+.box p { margin: 0; color: var(--muted); line-height: 1.45; font-size: 13.5px; }
+.box input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.box input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.buttons button { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; font-weight: 600; }
+.buttons button:hover:not(:disabled) { background: var(--hover); }
+.buttons button:disabled { opacity: 0.5; cursor: default; }
+.buttons .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.buttons .primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+.buttons .danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.buttons .danger:hover { background: var(--danger); filter: brightness(1.08); }
+:global(:root[data-theme='dark']) .buttons .primary { color: #0b1020; }

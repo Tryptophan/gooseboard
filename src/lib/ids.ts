@@ -13,8 +13,8 @@ export function randomId(len: number): string {
   return out
 }
 
-/** 8 chars of base62 ≈ 47.6 bits. */
-export const newBoardId = () => randomId(8)
+/** 12 chars of base62 ≈ 71 bits: the id is also the room password. Older 8-char ids still work. */
+export const newBoardId = () => randomId(12)
 export const newItemId = () => randomId(12)
 export const newUserId = () => randomId(16)
 

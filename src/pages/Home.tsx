@@ -1,10 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ROOM_PREFIX } from '../config'
 import { newBoardId, parseBoardRef } from '../lib/ids'
-import { forgetBoard, getBoards, getProfile, renameBoardPending, saveProfile, touchBoard, USER_COLORS, type BoardEntry } from '../lib/storage'
+import { forgetBoard, getBoards, getProfile, renameBoardLocal, renameBoardPending, saveProfile, touchBoard, USER_COLORS, type BoardEntry } from '../lib/storage'
+import type { PresenceUser } from '../model/types'
+import { watchPresence } from '../net/presence'
+import { AvatarStack, useBudget } from '../components/Avatars'
+import { confirmDialog, copyDialog, promptDialog } from '../components/Dialog'
 import { Icon } from '../components/Icons'
-import { useUi, useUiDispatch } from '../state/ui'
+import { useThemeToggle } from '../state/ui'
 import s from './Home.module.css'
 
 const boardUrl = (id: string) => `${window.location.origin}${window.location.pathname}#/board/${id}`
@@ -18,15 +22,41 @@ function ago(ts: number) {
   return `${Math.round(h / 24)} d ago`
 }
 
+/** Live presence is watched for this many of the most recently opened boards. */
+const WATCHED = 24
+
+/** Who is on each board now; also adopts names peers have given a board since we last opened it. */
+function useBoardPresence(boards: BoardEntry[], onRenamed: () => void) {
+  const [users, setUsers] = useState<Record<string, PresenceUser[]>>({})
+  const ids = boards.slice(0, WATCHED).map((b) => b.id).join(',')
+  const renamed = useRef(onRenamed)
+  renamed.current = onRenamed
+  useEffect(() => {
+    const stops = ids.split(',').filter(Boolean).map((id) =>
+      watchPresence(id, (p) => {
+        setUsers((u) => ({ ...u, [id]: p.users }))
+        const e = getBoards().find((b) => b.id === id)
+        // a rename made here and not yet carried into the board wins over what peers announce
+        if (p.name && e && e.pendingName === undefined && e.name !== p.name) {
+          renameBoardLocal(id, p.name)
+          renamed.current()
+        }
+      }),
+    )
+    return () => stops.forEach((s) => s())
+  }, [ids])
+  return users
+}
+
 export default function Home() {
   const nav = useNavigate()
-  const ui = useUi()
-  const dispatch = useUiDispatch()
+  const theme = useThemeToggle()
   const [boards, setBoards] = useState<BoardEntry[]>(getBoards)
   const [join, setJoin] = useState('')
   const [joinErr, setJoinErr] = useState(false)
   const [profile, setProfile] = useState({ ...getProfile() })
   const [copied, setCopied] = useState<string | null>(null)
+  const online = useBoardPresence(boards, () => setBoards(getBoards()))
 
   const create = () => {
     const id = newBoardId()
@@ -38,8 +68,14 @@ export default function Home() {
     if (!id) return setJoinErr(true)
     nav(`/board/${id}`)
   }
-  const remove = (b: BoardEntry) => {
-    if (!window.confirm(`Remove “${b.name}” from this browser? Its local copy is deleted; other people who have it keep theirs.`)) return
+  const remove = async (b: BoardEntry) => {
+    const ok = await confirmDialog({
+      title: `Remove “${b.name || 'Untitled board'}”?`,
+      message: 'Its copy in this browser is deleted. Other people who have it keep theirs.',
+      ok: 'Remove',
+      danger: true,
+    })
+    if (!ok) return
     forgetBoard(b.id)
     try {
       indexedDB.deleteDatabase(ROOM_PREFIX + b.id)
@@ -54,10 +90,9 @@ export default function Home() {
       setCopied(id)
       setTimeout(() => setCopied(null), 1500)
     } catch {
-      window.prompt('Copy this link', boardUrl(id))
+      void copyDialog('Copy this link', boardUrl(id), 'Anyone with it can join and edit.')
     }
   }
-  const nextTheme = { system: 'light', light: 'dark', dark: 'system' } as const
 
   return (
     <main className={s.page}>
@@ -67,8 +102,8 @@ export default function Home() {
           <h1>Gooseboard</h1>
           <p>A peer-to-peer infinite canvas. Notes, files, folders and ink, shared straight between browsers.</p>
         </div>
-        <button className={s.theme} onClick={() => dispatch({ type: 'theme', theme: nextTheme[ui.theme] })} title={`Theme: ${ui.theme}`}>
-          <Icon name={ui.theme === 'dark' ? 'moon' : 'sun'} size={18} />
+        <button className={s.theme} onClick={theme.toggle} title={theme.dark ? 'Switch to light theme' : 'Switch to dark theme'}>
+          <Icon name={theme.dark ? 'moon' : 'sun'} size={18} />
         </button>
       </header>
 
@@ -109,12 +144,13 @@ export default function Home() {
                     {b.id} · opened {ago(b.lastOpened)}
                   </span>
                 </button>
+                <OnlineNow users={online[b.id] ?? []} />
                 <button
                   title="Rename"
-                  onClick={() => {
-                    const n = window.prompt('Board name', b.name)
-                    if (n?.trim()) {
-                      renameBoardPending(b.id, n.trim())
+                  onClick={async () => {
+                    const n = await promptDialog({ title: 'Rename board', value: b.name, placeholder: 'Untitled board', ok: 'Rename' })
+                    if (n && n !== b.name) {
+                      renameBoardPending(b.id, n)
                       setBoards(getBoards())
                     }
                   }}
@@ -124,7 +160,7 @@ export default function Home() {
                 <button title="Copy invite link" onClick={() => void copy(b.id)}>
                   {copied === b.id ? 'Copied!' : 'Copy link'}
                 </button>
-                <button title="Remove from this browser" className={s.del} onClick={() => remove(b)}>
+                <button title="Remove from this browser" className={s.del} onClick={() => void remove(b)}>
                   <Icon name="trash" size={16} />
                 </button>
               </li>
@@ -156,8 +192,25 @@ export default function Home() {
       </section>
 
       <footer className={s.foot}>
-        Boards sync directly between browsers over WebRTC (Yjs CRDT). Public Nostr relays and WebTorrent trackers only introduce peers (no server of our own). Files you share stay on your disk; small ones are copied to everyone on the board.
+        Your boards go straight from your browser to the people you share them with. There’s no Gooseboard server in the middle, and no account to sign up for. Files you add stay on your computer and are sent only when someone opens them. Small files are copied to everyone on the board so they’re always handy.
       </footer>
     </main>
+  )
+}
+
+function OnlineNow({ users }: { users: PresenceUser[] }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const budget = useBudget(ref, 1)
+  return (
+    <div ref={ref} className={s.online} title={users.length ? `${users.length} on this board now` : undefined}>
+      {users.length > 0 && (
+        <>
+          <AvatarStack users={users} budget={budget - 70} />
+          <span className={s.onlineCount}>
+            <i /> {users.length} online
+          </span>
+        </>
+      )}
+    </div>
   )
 }

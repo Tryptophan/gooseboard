@@ -16,6 +16,13 @@
 .avatar { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--panel); margin-left: -6px; color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; display: grid; place-items: center; padding: 0; }
 .avatars .avatar:first-child { margin-left: 0; }
 .following { box-shadow: 0 0 0 2px var(--accent); }
+.avatar.more { background: var(--hover); color: var(--text); font-size: 11.5px; font-weight: 650; }
+.avatar.static, .avatar.more[tabindex='-1'] { cursor: default; }
+.peerList { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; max-height: 50vh; overflow: auto; }
+.peerList button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 6px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; text-align: left; color: var(--text); }
+.peerList button:hover { background: var(--hover); }
+.peerList .avatar { width: 24px; height: 24px; margin: 0; font-size: 11px; cursor: inherit; }
+.rest { display: flex; align-items: center; gap: 8px; }
 .iconBtn { width: 34px; height: 34px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 9px; cursor: pointer; }
 .iconBtn:hover { background: var(--hover); }
 .shareBtn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: var(--accent); color: #fff; font-weight: 600; padding: 7px 14px; border-radius: 10px; cursor: pointer; }

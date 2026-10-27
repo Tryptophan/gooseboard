@@ -49,11 +49,15 @@ export class HandleDir implements DirSource {
   }
 
   async getFile(path: string): Promise<File> {
+    return (await this.fileHandle(path)).getFile()
+  }
+
+  async fileHandle(path: string): Promise<any> {
     const parts = segs(path)
     const name = parts.pop()
     if (!name) throw new Error('no file')
     const d = await this.dirAt(parts)
-    return (await d.getFileHandle(name)).getFile()
+    return d.getFileHandle(name)
   }
 }
 
@@ -216,6 +220,17 @@ export class LocalSources {
     if (!f) return null
     // Chromium File objects go stale if the file changed/moved; fail soft and force relink
     return f
+  }
+
+  /** A file inside one of my linked directories, with its handle when the browser gives one. */
+  async fileIn(key: string, path: string): Promise<{ file: File; handle?: any } | null> {
+    const d = await this.getDir(key)
+    if (!d) return null
+    if (d instanceof HandleDir) {
+      const handle = await d.fileHandle(path)
+      return { file: await handle.getFile(), handle }
+    }
+    return { file: await d.getFile(path) }
   }
 
   async getDir(key: string): Promise<DirSource | null> {

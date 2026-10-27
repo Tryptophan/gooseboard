@@ -1,15 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import { formatSize, kindOf } from '../lib/files'
+import type { Vec } from '../lib/geometry'
+import { toast } from '../lib/toast'
 import { normalizeUrl } from '../lib/url'
 import { addDropItems, pickFiles, readDrop } from '../model/actions'
 import { fragmentToText } from '../model/noteSchema'
 import type { FolderItem, Item } from '../model/types'
 import { FOLDER_COLORS, NOTE_COLORS } from '../model/types'
 import { folderAlias } from '../net/mirror'
+import type { Session } from '../net/session'
 import type { DirEntry } from '../net/sources'
 import { useCamera } from '../state/camera'
 import { usePeers, useSession, useSnapshot } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
+import { openMenu } from './ContextMenu'
+import { promptDialog } from './Dialog'
 import { safeThumb } from './FileCard'
 import { Icon } from './Icons'
 import { canPreview, usePreview } from './Preview'
@@ -24,24 +29,210 @@ export function FolderPanel() {
   return <Shell key={folder.id} folder={folder} />
 }
 
+// ---------- dragging out of the panel ----------
+
+/**
+ * Pointer-driven (not HTML5 drag and drop, which the canvas already uses for OS files):
+ * tiles drag onto a folder tile, a breadcrumb, a folder on the canvas or the canvas itself.
+ * Folder tiles and breadcrumbs carry data-drop="<folder id>".
+ */
+type Payload = { kind: 'item'; item: Item; label: string } | { kind: 'entry'; folder: FolderItem; entry: DirEntry; path: string; label: string }
+
+type Target = { folder: string } | { canvas: Vec } | null
+
+type StartDrag = (e: RPointerEvent, p: Payload) => void
+
+function canvasPoint(x: number, y: number, cam: ReturnType<typeof useCamera>): Vec | null {
+  const host = document.querySelector<HTMLElement>('[data-canvas]')
+  if (!host) return null
+  const r = host.getBoundingClientRect()
+  return cam.screenToWorld(x - r.left, y - r.top)
+}
+
+function useDrag(session: Session, cam: ReturnType<typeof useCamera>) {
+  const { store } = session
+  const dispatch = useUiDispatch()
+  const [ghost, setGhost] = useState<{ x: number; y: number; label: string } | null>(null)
+  const [hover, setHover] = useState<string | null>(null)
+  const canvasHover = useRef<HTMLElement | null>(null)
+
+  const targetAt = useCallback(
+    (x: number, y: number, p: Payload): { target: Target; key: string | null; el?: HTMLElement } => {
+      const els = document.elementsFromPoint(x, y) as HTMLElement[]
+      const drop = els.map((el) => el.closest<HTMLElement>('[data-drop]')).find(Boolean)
+      const own = p.kind === 'item' ? p.item.id : null
+      if (drop) {
+        const d = drop.dataset.drop!
+        return d === own ? { target: null, key: null } : { target: { folder: d }, key: d }
+      }
+      // anywhere else in the panel (or other chrome) is not a target
+      if (els[0]?.closest('[data-nodrag]')) return { target: null, key: null }
+      const itemEl = els.map((el) => el.closest<HTMLElement>('[data-item-id]')).find(Boolean)
+      const it = itemEl ? store.getSnapshot().all.get(itemEl.dataset.itemId!) : undefined
+      if (it?.type === 'folder' && it.mode === 'virtual' && it.id !== own) return { target: { folder: it.id }, key: it.id, el: itemEl! }
+      if (!els.some((el) => el.closest('[data-canvas]'))) return { target: null, key: null }
+      const wp = canvasPoint(x, y, cam)
+      return wp ? { target: { canvas: wp }, key: null } : { target: null, key: null }
+    },
+    [store, cam],
+  )
+
+  const drop = useCallback(
+    async (p: Payload, t: Target) => {
+      if (!t) return
+      const folderName = (id: string) => {
+        const f = store.getSnapshot().all.get(id)
+        return f?.type === 'folder' ? f.name : 'folder'
+      }
+      if (p.kind === 'item') {
+        const it = p.item
+        if ('folder' in t) {
+          if (t.folder === it.parent) return
+          if (store.isDescendant(t.folder, it.id)) return toast('A folder can’t go inside itself')
+          store.undo.stopCapturing()
+          store.reparent([it.id], t.folder)
+          toast(`Moved “${p.label}” into “${folderName(t.folder)}”`)
+        } else {
+          store.undo.stopCapturing()
+          store.update(it.id, { parent: null, x: Math.round(t.canvas.x - it.w / 2), y: Math.round(t.canvas.y - it.h / 2) })
+          dispatch({ type: 'select', ids: [it.id] })
+        }
+        return
+      }
+      const ids = await copyEntryOut(session, p.folder, p.entry, p.path, 'folder' in t ? { x: 0, y: 0 } : t.canvas, 'folder' in t ? t.folder : null)
+      if (!ids) return
+      if ('folder' in t) toast(`Copied “${p.entry.name}” into “${folderName(t.folder)}”`)
+      else dispatch({ type: 'select', ids })
+    },
+    [session, store, dispatch],
+  )
+
+  const setCanvasHover = (el: HTMLElement | null) => {
+    if (canvasHover.current === el) return
+    canvasHover.current?.removeAttribute('data-drop-hover')
+    el?.setAttribute('data-drop-hover', '')
+    canvasHover.current = el
+  }
+
+  const start: StartDrag = (e, p) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('button, a, input')) return
+    const sx = e.clientX
+    const sy = e.clientY
+    let dragging = false
+    const move = (ev: PointerEvent) => {
+      if (!dragging && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return
+      dragging = true
+      setGhost({ x: ev.clientX, y: ev.clientY, label: p.label })
+      const t = targetAt(ev.clientX, ev.clientY, p)
+      setHover(t.key)
+      setCanvasHover(t.el ?? null)
+    }
+    const end = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', end)
+      setGhost(null)
+      setHover(null)
+      setCanvasHover(null)
+      if (dragging && ev.type === 'pointerup') void drop(p, targetAt(ev.clientX, ev.clientY, p).target)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', end)
+  }
+
+  return { start, ghost, hover }
+}
+
+/** Disk folders are read-only listings, so a file dragged out becomes a copy shared by whoever dragged it. */
+async function copyEntryOut(session: Session, folder: FolderItem, entry: DirEntry, path: string, at: Vec, parent: string | null): Promise<string[] | null> {
+  if (entry.kind !== 'file') {
+    toast('Only files can be copied out of a disk folder')
+    return null
+  }
+  try {
+    let got = folder.owner === session.profile.id ? await session.sources.fileIn(folder.key ?? '', path).catch(() => null) : null
+    if (!got) {
+      toast(`Copying “${entry.name}”…`)
+      const req = { op: 'file', kind: 'dir', key: folder.key ?? '', path, alias: folderAlias(folder.key ?? '', path, entry.size, entry.mtime) } as const
+      const blob = await session.files.getBlob(folder.owner, req)
+      got = { file: new File([blob], entry.name, { type: entry.mime || blob.type, lastModified: entry.mtime }) }
+    }
+    return await addDropItems(session, [{ kind: 'file', file: got.file, handle: got.handle }], at, parent)
+  } catch (e) {
+    toast(`Couldn’t copy “${entry.name}”: ${(e as Error).message === 'unreachable' ? `${folder.ownerName} is offline` : (e as Error).message}`)
+    return null
+  }
+}
+
+// ---------- shell: header, breadcrumbs, back ----------
+
 function Shell({ folder }: { folder: FolderItem }) {
-  const { store } = useSession()
+  const session = useSession()
+  const { store } = session
   const snap = useSnapshot()
+  const cam = useCamera()
   const dispatch = useUiDispatch()
   const [name, setName] = useState<string | null>(null)
-  const crumbs: FolderItem[] = []
-  for (let p = folder.parent ? snap.all.get(folder.parent) : undefined; p && p.type === 'folder' && crumbs.length < 8; p = p.parent ? snap.all.get(p.parent) : undefined) crumbs.unshift(p)
+  // sub-directory inside a disk folder
+  const [path, setPath] = useState<string[]>([])
+  const drag = useDrag(session, cam)
+
+  const ancestors: FolderItem[] = []
+  for (let p = folder.parent ? snap.all.get(folder.parent) : undefined; p && p.type === 'folder' && ancestors.length < 20; p = p.parent ? snap.all.get(p.parent) : undefined) ancestors.unshift(p)
+  const parent = ancestors[ancestors.length - 1]
+
+  const back = () => {
+    if (path.length) setPath(path.slice(0, -1))
+    else dispatch({ type: 'folder', id: parent?.id ?? null })
+  }
+  const virtual = folder.mode === 'virtual'
+  const crumb = (id: string, droppable: boolean) => `${droppable && drag.hover === id ? s.dropOn : ''}`
 
   return (
-    <aside className={s.panel} data-nodrag>
+    <aside
+      className={s.panel}
+      data-nodrag
+      data-folder-panel
+      onKeyDown={(e) => {
+        // Backspace / Alt+Left go back, like a file browser
+        if ((e.target as HTMLElement).closest('input')) return
+        if (e.key === 'Backspace' || (e.altKey && e.key === 'ArrowLeft')) {
+          e.preventDefault()
+          e.stopPropagation()
+          back()
+        }
+      }}
+    >
       <header>
-        <div className={s.crumbs}>
-          {crumbs.map((c) => (
-            <button key={c.id} onClick={() => dispatch({ type: 'folder', id: c.id })}>
-              {c.name} /
-            </button>
+        <nav className={s.crumbs} aria-label="Folder path">
+          <button className={s.back} onClick={back} title={path.length || parent ? 'Back' : 'Back to the canvas'} aria-label="Back">
+            <Icon name="up" size={15} />
+          </button>
+          {/* the outermost folder is the root of the path */}
+          {ancestors.map((c, i) => (
+            <span key={c.id} className={s.crumb}>
+              {i > 0 && <i>/</i>}
+              <button data-drop={c.mode === 'virtual' ? c.id : undefined} className={crumb(c.id, c.mode === 'virtual')} onClick={() => dispatch({ type: 'folder', id: c.id })}>
+                {c.name}
+              </button>
+            </span>
           ))}
-        </div>
+          <span className={s.crumb}>
+            {ancestors.length > 0 && <i>/</i>}
+            <button data-drop={virtual ? folder.id : undefined} className={`${path.length ? '' : s.here} ${crumb(folder.id, virtual)}`} onClick={() => setPath([])}>
+              {folder.name}
+            </button>
+          </span>
+          {path.map((p, i) => (
+            <span key={i} className={s.crumb}>
+              <i>/</i>
+              <button className={i === path.length - 1 ? s.here : ''} onClick={() => setPath(path.slice(0, i + 1))}>
+                {p}
+              </button>
+            </span>
+          ))}
+        </nav>
         <div className={s.titleRow}>
           <Icon name={folder.mode === 'disk' ? 'disk' : 'folder'} size={20} />
           <input
@@ -66,20 +257,30 @@ function Shell({ folder }: { folder: FolderItem }) {
           </button>
         </div>
       </header>
-      {folder.mode === 'virtual' ? <VirtualBody folder={folder} /> : <DiskBody folder={folder} />}
+      {virtual ? (
+        <VirtualBody folder={folder} drag={drag.start} hover={drag.hover} />
+      ) : (
+        <DiskBody folder={folder} path={path} setPath={setPath} drag={drag.start} />
+      )}
+      {drag.ghost && (
+        <div className={s.ghost} style={{ left: drag.ghost.x, top: drag.ghost.y }}>
+          {drag.ghost.label}
+        </div>
+      )}
     </aside>
   )
 }
 
 // ---------- virtual folders ----------
 
-function VirtualBody({ folder }: { folder: FolderItem }) {
+function VirtualBody({ folder, drag, hover }: { folder: FolderItem; drag: StartDrag; hover: string | null }) {
   const session = useSession()
   const { store, profile } = session
   const snap = useSnapshot()
   const cam = useCamera()
   const dispatch = useUiDispatch()
   const [over, setOver] = useState(false)
+  const [selected, setSelected] = useState<string | null>(null)
   const kids = snap.children.get(folder.id) ?? []
 
   const add = (init: Record<string, any> & { type: Item['type'] }) => store.add({ ...init, parent: folder.id })
@@ -93,6 +294,7 @@ function VirtualBody({ folder }: { folder: FolderItem }) {
   return (
     <div
       className={`${s.body} ${over ? s.over : ''}`}
+      onPointerDown={(e) => e.target === e.currentTarget && setSelected(null)}
       onDragOver={(e) => {
         if (e.dataTransfer.types.includes('Files')) {
           e.preventDefault()
@@ -112,9 +314,12 @@ function VirtualBody({ folder }: { folder: FolderItem }) {
           <Icon name="note" size={15} /> Note
         </button>
         <button
-          onClick={() => {
-            const u = normalizeUrl(window.prompt('Link URL') ?? '')
+          onClick={async () => {
+            const raw = await promptDialog({ title: 'Add a link', placeholder: 'https://…', ok: 'Add' })
+            if (raw === null) return
+            const u = normalizeUrl(raw)
             if (u) add({ type: 'link', url: u })
+            else toast('Only http(s) links can be added')
           }}
         >
           <Icon name="link" size={15} /> Link
@@ -134,59 +339,140 @@ function VirtualBody({ folder }: { folder: FolderItem }) {
       {kids.length === 0 ? (
         <p className={s.hint}>Empty. Drop files here, or drag items from the canvas onto the folder.</p>
       ) : (
-        <div className={s.grid}>
-          {kids.map((k) => (
-            <Child key={k.id} item={k} onOpenFolder={() => dispatch({ type: 'folder', id: k.id })} onOut={() => sendOut(k)} onDelete={() => store.remove([k.id])} />
-          ))}
-        </div>
+        <>
+          <div className={s.grid}>
+            {kids.map((k) => (
+              <Child
+                key={k.id}
+                item={k}
+                selected={selected === k.id}
+                dropOn={hover === k.id}
+                onSelect={() => setSelected(k.id)}
+                drag={drag}
+                onOpenFolder={() => dispatch({ type: 'folder', id: k.id })}
+                onOut={() => sendOut(k)}
+                onDelete={() => {
+                  store.undo.stopCapturing()
+                  store.remove([k.id])
+                }}
+              />
+            ))}
+          </div>
+          <p className={s.hint}>Double-click to open. Drag onto the canvas, a folder or the path above to move.</p>
+        </>
       )}
     </div>
   )
 }
 
-function Child({ item, onOpenFolder, onOut, onDelete }: { item: Item; onOpenFolder: () => void; onOut: () => void; onDelete: () => void }) {
+interface ChildProps {
+  item: Item
+  selected: boolean
+  dropOn: boolean
+  onSelect: () => void
+  drag: StartDrag
+  onOpenFolder: () => void
+  onOut: () => void
+  onDelete: () => void
+}
+
+function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, onDelete }: ChildProps) {
   const { store, files } = useSession()
   const preview = usePreview()
   let body: React.ReactNode = null
   let title = ''
   let sub = ''
+  const fileArgs =
+    item.type === 'file'
+      ? { ownerId: item.owner, ownerName: item.ownerName, req: { op: 'file', kind: 'file', key: item.key, hash: item.hash } as const, name: item.name, size: item.size, mime: item.mime }
+      : null
+  const canPrev = !!fileArgs && canPreview(fileArgs.name, fileArgs.mime, fileArgs.size)
+  const url = item.type === 'link' ? normalizeUrl(item.url) : null
+
   if (item.type === 'note') {
     const f = store.noteFragment(item.id)
     body = <div className={s.noteText} style={{ background: item.color }}>{(f ? fragmentToText(f) : '').slice(0, 160) || 'Empty note'}</div>
     title = 'Note'
   } else if (item.type === 'file') {
     const t = safeThumb(item.thumb)
-    body = <div className={s.thumb}>{t ? <img src={t} alt="" /> : <TypeIcon name={item.name} mime={item.mime} size={44} />}</div>
+    body = <div className={s.thumb}>{t ? <img src={t} alt="" draggable={false} /> : <TypeIcon name={item.name} mime={item.mime} size={44} />}</div>
     title = item.name
     sub = `${formatSize(item.size)} · ${item.ownerName}`
   } else if (item.type === 'folder') {
-    body = <button className={s.folderBtn} style={{ background: item.color }} onClick={onOpenFolder}><Icon name={item.mode === 'disk' ? 'disk' : 'folder'} size={28} /></button>
+    body = <div className={s.folderBtn} style={{ background: item.color }}><Icon name={item.mode === 'disk' ? 'disk' : 'folder'} size={28} /></div>
     title = item.name
     sub = item.mode === 'disk' ? 'Disk folder' : 'Folder'
   } else if (item.type === 'link') {
     body = <div className={s.thumb}><Icon name="link" size={28} /></div>
-    title = item.url ? (normalizeUrl(item.url) ? new URL(normalizeUrl(item.url)!).host : 'Blocked link') : 'Empty link'
+    title = item.url ? (url ? new URL(url).host : 'Blocked link') : 'Empty link'
     sub = item.url
   } else body = <div className={s.thumb}><Icon name="pen" size={26} /></div>
 
+  const open = () => {
+    if (item.type === 'folder') onOpenFolder()
+    else if (fileArgs) {
+      if (canPrev) preview(fileArgs)
+      else void files.download(fileArgs)
+    } else if (url) window.open(url, '_blank', 'noopener,noreferrer')
+  }
+  const opens = item.type === 'folder' || !!fileArgs || !!url
+
   return (
-    <div className={s.child}>
+    <div
+      className={`${s.child} ${selected ? s.selected : ''} ${dropOn ? s.dropOn : ''}`}
+      tabIndex={0}
+      data-drop={item.type === 'folder' && item.mode === 'virtual' ? item.id : undefined}
+      onPointerDown={(e) => {
+        onSelect()
+        drag(e, { kind: 'item', item, label: title || 'Item' })
+      }}
+      onDoubleClick={(e) => !(e.target as HTMLElement).closest('button, a') && open()}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return
+        // handled here, not by the canvas shortcuts underneath
+        if (e.key === 'Enter') {
+          e.stopPropagation()
+          open()
+        } else if (e.key === 'Delete') {
+          e.stopPropagation()
+          onDelete()
+        }
+      }}
+      onContextMenu={(e) => {
+        onSelect()
+        openMenu(e, [
+          opens && { label: item.type === 'folder' ? 'Open' : canPrev ? 'Preview' : url ? 'Open link' : 'Download', icon: item.type === 'folder' ? 'folder' : canPrev ? 'eye' : url ? 'link' : 'download', hint: 'Enter', onSelect: open },
+          canPrev && fileArgs && { label: 'Download', icon: 'download', onSelect: () => void files.download(fileArgs) },
+          item.type === 'folder' && {
+            label: 'Rename…',
+            onSelect: async () => {
+              const n = await promptDialog({ title: 'Rename folder', value: item.name, ok: 'Rename' })
+              if (n) store.update(item.id, { name: n })
+            },
+          },
+          'sep',
+          { label: 'Move onto the canvas', icon: 'up', onSelect: onOut },
+          'sep',
+          { label: 'Delete', icon: 'trash', hint: 'Del', danger: true, onSelect: onDelete },
+        ])
+      }}
+    >
       {body}
       <div className={s.childName} title={title}>{title}</div>
       {sub && <div className={s.childSub} title={sub}>{sub}</div>}
       <div className={s.childActions}>
-        {item.type === 'file' && canPreview(item.name, item.mime, item.size) && (
-          <button title="Preview" onClick={() => preview({ ownerId: item.owner, ownerName: item.ownerName, req: { op: 'file', kind: 'file', key: item.key, hash: item.hash }, name: item.name, size: item.size, mime: item.mime })}>
+        {canPrev && fileArgs && (
+          <button title="Preview" onClick={() => preview(fileArgs)}>
             <Icon name="eye" size={14} />
           </button>
         )}
-        {item.type === 'file' && (
-          <button title="Download" onClick={() => void files.download({ ownerId: item.owner, ownerName: item.ownerName, req: { op: 'file', kind: 'file', key: item.key, hash: item.hash }, name: item.name, size: item.size })}>
+        {fileArgs && (
+          <button title="Download" onClick={() => void files.download(fileArgs)}>
             <Icon name="download" size={14} />
           </button>
         )}
-        {item.type === 'link' && normalizeUrl(item.url) && (
-          <a title="Open" href={normalizeUrl(item.url)!} target="_blank" rel="noopener noreferrer"><Icon name="link" size={14} /></a>
+        {url && (
+          <a title="Open" href={url} target="_blank" rel="noopener noreferrer"><Icon name="link" size={14} /></a>
         )}
         <button title="Move onto the canvas" onClick={onOut}><Icon name="up" size={14} /></button>
         <button title="Delete" onClick={onDelete}><Icon name="trash" size={14} /></button>
@@ -197,14 +483,14 @@ function Child({ item, onOpenFolder, onOut, onDelete }: { item: Item; onOpenFold
 
 // ---------- disk folders (listed and fetched live from the owner) ----------
 
-function DiskBody({ folder }: { folder: FolderItem }) {
+function DiskBody({ folder, path, setPath, drag }: { folder: FolderItem; path: string[]; setPath: (p: string[]) => void; drag: StartDrag }) {
   const { files, profile } = useSession()
   const { online } = usePeers()
-  const [path, setPath] = useState<string[]>([])
   const [entries, setEntries] = useState<DirEntry[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [tick, setTick] = useState(0)
+  const [selected, setSelected] = useState<string | null>(null)
   const mine = folder.owner === profile.id
   const rel = path.join('/')
 
@@ -212,6 +498,7 @@ function DiskBody({ folder }: { folder: FolderItem }) {
     let dead = false
     setEntries(null)
     setErr(null)
+    setSelected(null)
     setNote(mine || online.has(folder.owner) ? 'Loading…' : `Waiting for ${folder.ownerName} to come online…`)
     files
       .list(folder.owner, folder.key ?? '', rel, (st) => !dead && setNote(st === 'waiting-relink' ? `Waiting for ${folder.ownerName} to relink this folder…` : st === 'waiting-owner' ? `Waiting for ${folder.ownerName} to come online…` : 'Loading…'))
@@ -223,30 +510,19 @@ function DiskBody({ folder }: { folder: FolderItem }) {
   }, [files, folder.owner, folder.key, folder.ownerName, rel, tick, mine, online])
 
   return (
-    <div className={s.body}>
+    <div className={s.body} onPointerDown={(e) => e.target === e.currentTarget && setSelected(null)}>
       <div className={s.actions}>
-        <button disabled={!path.length} onClick={() => setPath(path.slice(0, -1))}>
-          <Icon name="up" size={15} /> Up
-        </button>
-        <span className={s.path}>
-          <button onClick={() => setPath([])}>{folder.name}</button>
-          {path.map((p, i) => (
-            <button key={i} onClick={() => setPath(path.slice(0, i + 1))}>
-              / {p}
-            </button>
-          ))}
-        </span>
+        <p className={s.hint}>
+          {mine
+            ? 'Served from your disk.'
+            : online.has(folder.owner)
+              ? `Browsing ${folder.ownerName}’s disk live: files are streamed peer-to-peer only when you open or download them.`
+              : `${folder.ownerName} is offline: showing the last listing seen. Files open if someone online has a copy.`}
+        </p>
         <button onClick={() => setTick(tick + 1)} title="Fetch the listing again">
           <Icon name="refresh" size={15} />
         </button>
       </div>
-      <p className={s.hint}>
-        {mine
-          ? 'Served from your disk.'
-          : online.has(folder.owner)
-            ? `Browsing ${folder.ownerName}’s disk live: files are streamed peer-to-peer only when you open or download them.`
-            : `${folder.ownerName} is offline: showing the last listing seen. Files open if someone online has a copy.`}
-      </p>
       {err ? (
         <p className={s.error}>{err}</p>
       ) : !entries ? (
@@ -254,23 +530,49 @@ function DiskBody({ folder }: { folder: FolderItem }) {
       ) : entries.length === 0 ? (
         <p className={s.hint}>This folder is empty.</p>
       ) : (
-        <div className={s.grid}>
-          {entries.map((e) => (
-            <Entry key={e.name} folder={folder} entry={e} path={rel ? `${rel}/${e.name}` : e.name} onOpen={() => setPath([...path, e.name])} />
-          ))}
-        </div>
+        <>
+          <div className={s.grid}>
+            {entries.map((e) => (
+              <Entry
+                key={e.name}
+                folder={folder}
+                entry={e}
+                path={rel ? `${rel}/${e.name}` : e.name}
+                selected={selected === e.name}
+                onSelect={() => setSelected(e.name)}
+                drag={drag}
+                onOpen={() => setPath([...path, e.name])}
+              />
+            ))}
+          </div>
+          <p className={s.hint}>Double-click to open. Drag a file onto the canvas or a folder to add a copy.</p>
+        </>
       )}
     </div>
   )
 }
 
-function Entry({ folder, entry, path, onOpen }: { folder: FolderItem; entry: DirEntry; path: string; onOpen: () => void }) {
-  const { files } = useSession()
+interface EntryProps {
+  folder: FolderItem
+  entry: DirEntry
+  path: string
+  selected: boolean
+  onSelect: () => void
+  drag: StartDrag
+  onOpen: () => void
+}
+
+function Entry({ folder, entry, path, selected, onSelect, drag, onOpen }: EntryProps) {
+  const session = useSession()
+  const { files } = session
+  const cam = useCamera()
+  const dispatch = useUiDispatch()
   const preview = usePreview()
   const ref = useRef<HTMLDivElement>(null)
   const [thumb, setThumb] = useState<string | null>(null)
   const kind = kindOf(entry.name, entry.mime)
-  const wantsThumb = entry.kind === 'file' && (kind === 'image' || kind === 'video')
+  const isFile = entry.kind === 'file'
+  const wantsThumb = isFile && (kind === 'image' || kind === 'video')
 
   // lazily fetch thumbnails only for entries that scroll into view
   useEffect(() => {
@@ -291,30 +593,59 @@ function Entry({ folder, entry, path, onOpen }: { folder: FolderItem; entry: Dir
 
   const req = { op: 'file', kind: 'dir', key: folder.key ?? '', path, alias: folderAlias(folder.key ?? '', path, entry.size, entry.mtime) } as const
   const args = { ownerId: folder.owner, ownerName: folder.ownerName, req, name: entry.name, size: entry.size, mime: entry.mime }
-  const open = useCallback(() => (entry.kind === 'dir' ? onOpen() : canPreview(entry.name, entry.mime, entry.size) ? preview(args) : void files.download(args)), [entry, onOpen, preview, files]) // eslint-disable-line react-hooks/exhaustive-deps
+  const canPrev = isFile && canPreview(entry.name, entry.mime, entry.size)
+  const open = () => (!isFile ? onOpen() : canPrev ? preview(args) : void files.download(args))
+  const copyOut = async () => {
+    const ids = await copyEntryOut(session, folder, entry, path, cam.viewCenter(), null)
+    if (ids) dispatch({ type: 'select', ids })
+  }
 
   return (
-    <div className={s.child} ref={ref}>
-      {entry.kind === 'dir' ? (
-        <button className={s.folderBtn} style={{ background: folder.color }} onClick={onOpen}>
+    <div
+      className={`${s.child} ${selected ? s.selected : ''}`}
+      ref={ref}
+      tabIndex={0}
+      onPointerDown={(e) => {
+        onSelect()
+        if (isFile) drag(e, { kind: 'entry', folder, entry, path, label: entry.name })
+      }}
+      onDoubleClick={(e) => !(e.target as HTMLElement).closest('button') && open()}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' || e.target !== e.currentTarget) return
+        e.stopPropagation()
+        open()
+      }}
+      onContextMenu={(e) => {
+        onSelect()
+        openMenu(e, [
+          { label: !isFile ? 'Open' : canPrev ? 'Preview' : 'Download', icon: !isFile ? 'folder' : canPrev ? 'eye' : 'download', hint: 'Enter', onSelect: open },
+          canPrev && { label: 'Download', icon: 'download', onSelect: () => void files.download(args) },
+          isFile && 'sep',
+          isFile && { label: 'Copy onto the canvas', icon: 'copy', onSelect: () => void copyOut() },
+        ])
+      }}
+    >
+      {!isFile ? (
+        <div className={s.folderBtn} style={{ background: folder.color }}>
           <Icon name="folder" size={28} />
-        </button>
-      ) : (
-        <div className={s.thumb} onClick={open} role="button" tabIndex={0}>
-          {thumb ? <img src={thumb} alt="" /> : <TypeIcon name={entry.name} mime={entry.mime} size={44} />}
         </div>
+      ) : (
+        <div className={s.thumb}>{thumb ? <img src={thumb} alt="" draggable={false} /> : <TypeIcon name={entry.name} mime={entry.mime} size={44} />}</div>
       )}
       <div className={s.childName} title={entry.name}>{entry.name}</div>
-      <div className={s.childSub}>{entry.kind === 'dir' ? 'Folder' : formatSize(entry.size)}</div>
-      {entry.kind === 'file' && (
+      <div className={s.childSub}>{!isFile ? 'Folder' : formatSize(entry.size)}</div>
+      {isFile && (
         <div className={s.childActions}>
-          {canPreview(entry.name, entry.mime, entry.size) && (
+          {canPrev && (
             <button title="Preview" onClick={() => preview(args)}>
               <Icon name="eye" size={14} />
             </button>
           )}
           <button title="Download" onClick={() => void files.download(args)}>
             <Icon name="download" size={14} />
+          </button>
+          <button title="Copy onto the canvas" onClick={() => void copyOut()}>
+            <Icon name="copy" size={14} />
           </button>
         </div>
       )}

@@ -1,4 +1,6 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { MenuHost } from './components/ContextMenu'
+import { DialogHost } from './components/Dialog'
 import BoardPage from './pages/BoardPage'
 import Home from './pages/Home'
 import { UiProvider } from './state/ui'
@@ -14,6 +16,8 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HashRouter>
+      <MenuHost />
+      <DialogHost />
     </UiProvider>
   )
 }

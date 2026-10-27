@@ -3,6 +3,7 @@ import { getProfile, type Profile } from '../lib/storage'
 import { FileService } from './fileService'
 import { Mirror } from './mirror'
 import { P2P } from './p2p'
+import { joinPresence, type PresenceHandle } from './presence'
 import { LocalSources } from './sources'
 import { FileSync } from './sync'
 import { TransferStore } from './transfers'
@@ -18,6 +19,8 @@ export interface Session {
   mirror: Mirror
   sync: FileSync
   transfers: TransferStore
+  /** announces this person in the board's presence room (seen from other people's home screens) */
+  presence: PresenceHandle
 }
 
 /** What this browser can serve is shared across boards (copy/paste between boards keeps working). */
@@ -58,7 +61,9 @@ function create(id: string): Session {
     const folders = new Set(all.flatMap((it) => (it.type === 'folder' && it.key ? [it.key] : [])))
     void mirror.gc(id, (e) => hashes.has(e.hash) || e.aliases.some((a) => folders.has(a.slice(0, a.indexOf('/')))))
   })
-  return { id, profile, store, p2p, files, sources, mirror, sync, transfers }
+  const presence = joinPresence(id, profile, () => store.name)
+  store.meta.observe(() => presence.refresh())
+  return { id, profile, store, p2p, files, sources, mirror, sync, transfers, presence }
 }
 
 interface Entry {
@@ -93,6 +98,7 @@ export function releaseSession(id: string) {
     const cur = live.get(id)
     if (!cur || cur.refs > 0) return
     live.delete(id)
+    cur.session.presence.release()
     cur.session.sync.destroy()
     cur.session.p2p.destroy()
     cur.session.store.destroy()

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, type Dispatch, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useReducer, useSyncExternalStore, type Dispatch, type ReactNode } from 'react'
 import { getTheme, saveTheme, type ThemePref } from '../lib/storage'
 import { PEN_COLORS } from '../model/types'
 
@@ -77,6 +77,22 @@ const DispatchCtx = createContext<Dispatch<UiAction> | null>(null)
 export function applyTheme(pref: ThemePref) {
   const dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+}
+
+const darkQuery = () => window.matchMedia('(prefers-color-scheme: dark)')
+const subscribeSystemDark = (l: () => void) => {
+  const mq = darkQuery()
+  mq.addEventListener('change', l)
+  return () => mq.removeEventListener('change', l)
+}
+
+/** The theme actually shown, and a one-click flip of it (leaves "system" on first use). */
+export function useThemeToggle() {
+  const { theme } = useUi()
+  const dispatch = useUiDispatch()
+  const systemDark = useSyncExternalStore(subscribeSystemDark, () => darkQuery().matches)
+  const dark = theme === 'dark' || (theme === 'system' && systemDark)
+  return { dark, toggle: () => dispatch({ type: 'theme', theme: dark ? 'light' : 'dark' }) }
 }
 
 export function UiProvider({ children }: { children: ReactNode }) {

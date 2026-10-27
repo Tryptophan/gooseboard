@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { renameBoardLocal, saveProfile, USER_COLORS } from '../lib/storage'
 import { toast } from '../lib/toast'
 import { signalStatus } from '../net/signal'
 import { usePeers, useSession } from '../state/session'
-import { useUi, useUiDispatch } from '../state/ui'
+import { useThemeToggle, useUi, useUiDispatch } from '../state/ui'
+import { copyDialog } from './Dialog'
+import { fitAvatars, initial, MoreChip, useBudget } from './Avatars'
 import { Icon } from './Icons'
 import s from './Chrome.module.css'
 
@@ -47,14 +49,33 @@ function useBoardName(boardId: string) {
 export function TopBar({ boardId }: { boardId: string }) {
   const session = useSession()
   const { store } = session
-  const { peers } = usePeers()
+  const { peers: allPeers } = usePeers()
   const ui = useUi()
   const dispatch = useUiDispatch()
   const conn = useConnection()
+  const theme = useThemeToggle()
   const name = useBoardName(boardId)
   const [draft, setDraft] = useState<string | null>(null)
   const [showConn, setShowConn] = useState(false)
   const [showMe, setShowMe] = useState(false)
+  const [showMore, setShowMore] = useState(false)
+  const bodyRef = useRef(document.body)
+  const leftRef = useRef<HTMLDivElement>(null)
+  const restRef = useRef<HTMLDivElement>(null)
+  const avatarBudget = useBudget(bodyRef, 1) - useBudget(leftRef, 1) - useBudget(restRef, 1) - 80
+
+  // self first, so the "+N" overflow hides other people rather than your own profile button
+  const peers = [...allPeers].sort((a, b) => Number(b.isSelf) - Number(a.isSelf))
+  const shown = fitAvatars(peers.length, avatarBudget)
+  const clickPeer = (p: (typeof peers)[number]) => {
+    setShowMore(false)
+    if (p.isSelf) setShowMe(!showMe)
+    else dispatch({ type: 'follow', clientId: ui.follow === p.clientId ? null : p.clientId })
+  }
+  const updateProfile = (patch: Parameters<typeof saveProfile>[0]) => {
+    store.setProfile(saveProfile(patch))
+    session.presence.refresh()
+  }
 
   const up = conn.servers.filter((x) => x.connected).length
   const others = peers.filter((p) => !p.isSelf).length
@@ -66,7 +87,7 @@ export function TopBar({ boardId }: { boardId: string }) {
       await navigator.clipboard.writeText(url)
       toast('Board link copied. Anyone with it can join and edit.')
     } catch {
-      window.prompt('Copy this link', url)
+      void copyDialog('Copy this link', url, 'Anyone with it can join and edit.')
     }
   }
 
@@ -78,11 +99,10 @@ export function TopBar({ boardId }: { boardId: string }) {
     setDraft(null)
   }
 
-  const nextTheme = { system: 'light', light: 'dark', dark: 'system' } as const
 
   return (
     <>
-      <div className={`${s.panelBar} ${s.topLeft}`} data-nodrag>
+      <div className={`${s.panelBar} ${s.topLeft}`} data-nodrag ref={leftRef}>
         <Link to="/" className={s.logo} title="All boards">
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} width={26} height={26} alt="Gooseboard" />
         </Link>
@@ -127,25 +147,45 @@ export function TopBar({ boardId }: { boardId: string }) {
 
       <div className={`${s.panelBar} ${s.topRight}`} data-nodrag>
         <div className={s.avatars}>
-          {peers.map((p) => (
+          {peers.slice(0, shown).map((p) => (
             <button
               key={p.clientId}
               className={`${s.avatar} ${ui.follow === p.clientId ? s.following : ''}`}
               style={{ background: p.color }}
               title={p.isSelf ? `${p.name} (you): edit profile` : ui.follow === p.clientId ? `Following ${p.name}: click to stop` : `${p.name}: click to follow their view`}
-              onClick={() => (p.isSelf ? setShowMe(!showMe) : dispatch({ type: 'follow', clientId: ui.follow === p.clientId ? null : p.clientId }))}
+              onClick={() => clickPeer(p)}
             >
-              {p.name.slice(0, 1).toUpperCase()}
+              {initial(p.name)}
             </button>
           ))}
+          {shown < peers.length && <MoreChip hidden={peers.slice(shown).map((p) => p.name)} onClick={() => setShowMore(!showMore)} />}
         </div>
-        <button className={s.iconBtn} title={`Theme: ${ui.theme} (click for ${nextTheme[ui.theme]})`} onClick={() => dispatch({ type: 'theme', theme: nextTheme[ui.theme] })}>
-          <Icon name={ui.theme === 'dark' ? 'moon' : 'sun'} size={18} />
+        <div className={s.rest} ref={restRef}>
+        <button className={s.iconBtn} title={theme.dark ? 'Switch to light theme' : 'Switch to dark theme'} onClick={theme.toggle}>
+          <Icon name={theme.dark ? 'moon' : 'sun'} size={18} />
         </button>
         <button className={s.shareBtn} onClick={() => void share()}>
           <Icon name="share" size={16} /> Share
         </button>
+        </div>
       </div>
+
+      {showMore && shown < peers.length && (
+        <div className={`${s.popover} ${s.mePop}`} data-nodrag>
+          <b>Everyone here</b>
+          <ul className={s.peerList}>
+            {peers.map((p) => (
+              <li key={p.clientId}>
+                <button className={ui.follow === p.clientId ? s.following : ''} onClick={() => clickPeer(p)}>
+                  <span className={s.avatar} style={{ background: p.color }}>{initial(p.name)}</span>
+                  {p.name}
+                  <span className={s.muted}>{p.isSelf ? 'you' : ui.follow === p.clientId ? 'following' : ''}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {showMe && me && (
         <div className={`${s.popover} ${s.mePop}`} data-nodrag>
@@ -154,7 +194,7 @@ export function TopBar({ boardId }: { boardId: string }) {
             value={me.name}
             maxLength={24}
             onChange={(e) => {
-              store.setProfile(saveProfile({ name: e.target.value }))
+              updateProfile({ name: e.target.value })
             }}
             onKeyDown={(e) => {
               e.stopPropagation()
@@ -163,7 +203,7 @@ export function TopBar({ boardId }: { boardId: string }) {
           />
           <div className={s.swatches}>
             {USER_COLORS.map((c) => (
-              <button key={c} className={`${s.swatch} ${me.color === c ? s.swatchOn : ''}`} style={{ background: c }} onClick={() => store.setProfile(saveProfile({ color: c }))} aria-label={c} />
+              <button key={c} className={`${s.swatch} ${me.color === c ? s.swatchOn : ''}`} style={{ background: c }} onClick={() => updateProfile({ color: c })} aria-label={c} />
             ))}
           </div>
           <p className={s.muted}>Saved in this browser only. No account needed.</p>
