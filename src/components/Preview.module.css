@@ -16,3 +16,13 @@
 .progress { width: min(360px, 100%); display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .bar { width: 100%; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
 .bar > div { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.15s linear; }
+
+/* phones: full screen */
+@media (max-width: 720px) {
+  .backdrop { padding: 0; }
+  .box { border-radius: 0; border: 0; height: 100%; padding-bottom: var(--sab); }
+  .head { padding-top: calc(10px + var(--sat)); flex-wrap: wrap; gap: 8px; }
+  .body { flex: 1; min-height: 0; }
+  .body img, .body video { max-height: 100%; }
+  .body iframe { height: 100%; }
+}

@@ -1,7 +1,7 @@
 {
   "name": "Gooseboard",
   "short_name": "Gooseboard",
-  "description": "A collaborative infinite board, shared live between browsers. No accounts, no uploads.",
+  "description": "A collaborative decentralized board, shared live between browsers. No accounts, no cloud.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

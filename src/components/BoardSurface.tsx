@@ -5,6 +5,7 @@ import { linkBox } from '../lib/embed'
 import { isUrl } from '../lib/files'
 import { toast } from '../lib/toast'
 import { downsample, pointsBounds, strokePath } from '../lib/stroke'
+import { lastPointerType, LONG_PRESS_MS, SLOP, useCoarse } from '../lib/touch'
 import { normalizeUrl } from '../lib/url'
 import { addDropItems, pastedItems, pickFiles, readDrop } from '../model/actions'
 import type { ExportedItem } from '../model/board'
@@ -14,7 +15,7 @@ import { useCamera, type Cam } from '../state/camera'
 import { useSession, useSnapshot } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
 import { ContextBar } from './ContextBar'
-import { openMenu, type MenuEntry } from './ContextMenu'
+import { closeMenu, openMenu, type MenuEntry } from './ContextMenu'
 import { promptDialog } from './Dialog'
 import { canPreview, usePreview } from './Preview'
 import { ItemView } from './Items'
@@ -24,13 +25,19 @@ import s from './BoardSurface.module.css'
 
 type Inter =
   | { kind: 'pan'; sx: number; sy: number; cam: Cam }
-  | { kind: 'move'; start: Vec; orig: Map<string, Vec>; ids: string[]; moved: boolean }
+  | { kind: 'move'; start: Vec; orig: Map<string, Vec>; ids: string[]; moved: boolean; tapEdit: string | null }
+  /** touch on empty board, undecided: drag pans, hold opens the menu, hold then drag selects */
+  | { kind: 'press'; sx: number; sy: number; start: Vec; cam: Cam; long: boolean }
+  /** finger scrolling a long note being edited */
+  | { kind: 'scroll'; el: HTMLElement; sy: number; st: number; active: boolean }
   | { kind: 'marquee'; start: Vec; base: string[] }
   | { kind: 'resize'; id: string; handle: string; orig: { x: number; y: number; w: number; h: number; rot: number } }
   | { kind: 'rotate'; id: string; c: Vec; startAngle: number; origRot: number }
-  | { kind: 'draw'; points: number[]; tool: 'pen' | 'highlighter' }
+  | { kind: 'draw'; points: number[] }
   | { kind: 'erase' }
   | { kind: 'pinch'; d0: number; c0: Vec; cam0: Cam }
+
+type MenuEvent = { target: EventTarget; clientX: number; clientY: number; preventDefault(): void; stopPropagation(): void }
 
 const CLIP_PREFIX = 'GOOSEBOARD:'
 const isTyping = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"], .ProseMirror')
@@ -44,6 +51,14 @@ function canScrollFurther(t: HTMLElement, host: HTMLElement, e: WheelEvent): boo
     if (/auto|scroll/.test(st.overflowX) && ((e.deltaX > 0 && n.scrollLeft + n.clientWidth < n.scrollWidth - 1) || (e.deltaX < 0 && n.scrollLeft > 0))) return true
   }
   return false
+}
+
+/** The nearest element between `t` and `host` that can scroll vertically. */
+function scrollerOf(t: HTMLElement, host: HTMLElement): HTMLElement | null {
+  for (let n: HTMLElement | null = t; n && n !== host; n = n.parentElement) {
+    if (/auto|scroll/.test(getComputedStyle(n).overflowY) && n.scrollHeight > n.clientHeight) return n
+  }
+  return null
 }
 
 function overScroller(e: WheelEvent, host: HTMLElement): boolean {
@@ -67,7 +82,15 @@ export function BoardSurface() {
 
   const hostRef = useRef<HTMLDivElement>(null)
   const inter = useRef<Inter | null>(null)
+  /** touch points only: two of them pinch */
   const pointers = useRef(new Map<number, Vec>())
+  /** the pointer driving `inter` (other fingers, a resting palm, are ignored) */
+  const active = useRef({ id: -1, type: '' })
+  /** once a stylus shows up, it inks and fingers navigate */
+  const penSeen = useRef(false)
+  const pressTimer = useRef(0)
+  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null)
+  const coarse = useCoarse()
   const lastWorld = useRef<Vec | null>(null)
   const draftRef = useRef<{ points: number[]; color: string; size: number; opacity: number } | null>(null)
   const raf = useRef(0)
@@ -115,6 +138,40 @@ export function BoardSurface() {
     if (ui.selection.some((id) => !snap.all.has(id))) dispatch({ type: 'select', ids: ui.selection.filter((id) => snap.all.has(id)) })
     if (ui.editing && !snap.all.has(ui.editing)) dispatch({ type: 'editing', id: null })
   }, [snap, ui.selection, ui.editing, dispatch])
+
+  // ---- on-screen keyboard ----
+  // keep the note being edited above the keyboard (its top edge stays on screen)
+  useEffect(() => {
+    const vv = window.visualViewport
+    const id = ui.editing
+    if (!vv || !id) return
+    const fit = () => {
+      const it = snapRef.current.all.get(id)
+      if (!it) return
+      const c = camApi.camRef.current
+      const b = bounds(it)
+      const top = hostRef.current!.getBoundingClientRect().top + b.y * c.z + c.y
+      const over = top + b.h * c.z - (vv.offsetTop + vv.height - 12)
+      const dy = Math.min(over, top - (vv.offsetTop + 72))
+      if (over > 0 && dy > 0) camApi.panBy(0, -dy)
+    }
+    vv.addEventListener('resize', fit)
+    return () => vv.removeEventListener('resize', fit)
+  }, [ui.editing, camApi])
+
+  // iOS scrolls the whole page to show a focused field and leaves it there once the keyboard closes
+  useEffect(() => {
+    let t = 0
+    const reset = () => {
+      clearTimeout(t)
+      t = window.setTimeout(() => !isTyping(document.activeElement) && (scrollX || scrollY) && scrollTo(0, 0), 100)
+    }
+    window.addEventListener('focusout', reset)
+    return () => {
+      clearTimeout(t)
+      window.removeEventListener('focusout', reset)
+    }
+  }, [])
 
   // ---- presence ----
   const sendCursor = useCallback(
@@ -228,10 +285,9 @@ export function BoardSurface() {
   )
 
   const commitStroke = useCallback(
-    (points: number[], tool: 'pen' | 'highlighter') => {
-      const u = uiRef.current
-      const brush = tool === 'pen' ? u.pen : u.highlighter
-      const sz = tool === 'pen' ? brush.size : brush.size * 3
+    (points: number[]) => {
+      const brush = uiRef.current.pen
+      const sz = brush.size
       const pts = points.length === 3 ? [...points, points[0] + 0.01, points[1], points[2]] : points
       const b = pointsBounds(pts)
       const pad = sz
@@ -244,7 +300,7 @@ export function BoardSurface() {
       store.undo.stopCapturing()
       store.add({
         type: 'stroke', x: ox, y: oy, w, h, ow: w, oh: h, points: rel,
-        color: brush.color, size: sz, opacity: tool === 'highlighter' ? 0.38 : 1,
+        color: brush.color, size: sz, opacity: 1,
       } satisfies Omit<StrokeItem, 'id' | 'z' | 'rot' | 'parent'>)
     },
     [store],
@@ -260,27 +316,70 @@ export function BoardSurface() {
     setDraft(null)
   }
 
+  const clearPress = () => {
+    clearTimeout(pressTimer.current)
+    pressTimer.current = 0
+  }
+
+  /** Touch hold without moving: the right-click menu at the finger. */
+  const armLongPress = (e: RPointerEvent<HTMLDivElement>) => {
+    clearPress()
+    const at: MenuEvent = { target: e.target, clientX: e.clientX, clientY: e.clientY, preventDefault() {}, stopPropagation() {} }
+    pressTimer.current = window.setTimeout(() => {
+      pressTimer.current = 0
+      const it = inter.current
+      if (it?.kind === 'press') it.long = true
+      else if (it?.kind === 'move' && !it.moved) inter.current = null
+      else return
+      navigator.vibrate?.(10)
+      showMenu(at)
+    }, LONG_PRESS_MS)
+  }
+
   const onPointerDown = (e: RPointerEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement
     const host = hostRef.current!
     const u = uiRef.current
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    if (e.pointerType === 'touch' && pointers.current.size === 2) {
-      host.setPointerCapture(e.pointerId)
-      return startPinch()
+    const touch = e.pointerType === 'touch'
+    if (e.pointerType === 'pen') penSeen.current = true
+    if (touch) {
+      if (inter.current && active.current.type === 'pen') return // palm resting while the pen draws
+      if (e.isPrimary) pointers.current.clear() // first finger down: drop any point whose pointerup went missing
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (pointers.current.size > 2) return
+      if (pointers.current.size === 2) {
+        clearPress()
+        host.setPointerCapture(e.pointerId)
+        return startPinch()
+      }
     }
     if (target.closest('button, input, a, textarea, select, [data-nodrag]')) return
     const handleEl = target.closest<HTMLElement>('[data-handle]')
     const id = target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
     if (u.editing) {
-      if (id === u.editing && !handleEl) return // caret/selection inside the editor
+      if (id === u.editing && !handleEl) {
+        // caret/selection inside the editor; the board blocks native touch scrolling, so scroll long notes by hand
+        const el = touch ? scrollerOf(target, host) : null
+        if (el) {
+          active.current = { id: e.pointerId, type: e.pointerType }
+          inter.current = { kind: 'scroll', el, sy: e.clientY, st: el.scrollTop, active: false }
+        }
+        return
+      }
       dispatch({ type: 'editing', id: null })
       ;(document.activeElement as HTMLElement | null)?.blur?.()
     }
     const wp = toWorld(e)
     lastWorld.current = wp
+    active.current = { id: e.pointerId, type: e.pointerType }
 
-    if (e.button === 1 || (e.button === 0 && (space.current || u.tool === 'hand'))) {
+    const inkTool = u.tool === 'pen' || u.tool === 'eraser'
+    // with a stylus: the pen inks even under Select/Pan (handles still resize), and fingers navigate under ink tools
+    const penInks = e.pointerType === 'pen' && (u.tool === 'select' || u.tool === 'hand') && !handleEl
+    const fingerPans = touch && penSeen.current && inkTool
+    const tool = penInks ? 'pen' : u.tool
+
+    if (e.button === 1 || (e.button === 0 && (space.current || (tool === 'hand') || fingerPans))) {
       e.preventDefault()
       host.setPointerCapture(e.pointerId)
       dispatch({ type: 'follow', clientId: null })
@@ -289,14 +388,12 @@ export function BoardSurface() {
     }
     if (e.button !== 0) return
 
-    switch (u.tool) {
-      case 'pen':
-      case 'highlighter': {
+    switch (tool) {
+      case 'pen': {
         host.setPointerCapture(e.pointerId)
-        const brush = u.tool === 'pen' ? u.pen : u.highlighter
         const pr = e.pointerType === 'pen' ? e.pressure || 0.5 : 0.5
-        inter.current = { kind: 'draw', tool: u.tool, points: [wp.x, wp.y, pr] }
-        draftRef.current = { points: [wp.x, wp.y, pr], color: brush.color, size: u.tool === 'pen' ? brush.size : brush.size * 3, opacity: u.tool === 'highlighter' ? 0.38 : 1 }
+        inter.current = { kind: 'draw', points: [wp.x, wp.y, pr] }
+        draftRef.current = { points: [wp.x, wp.y, pr], color: u.pen.color, size: u.pen.size, opacity: 1 }
         setDraft({ ...draftRef.current })
         return
       }
@@ -342,7 +439,8 @@ export function BoardSurface() {
     }
     if (id) {
       let sel = u.selection
-      if (e.shiftKey) {
+      const wasOnly = sel.length === 1 && sel[0] === id
+      if (e.shiftKey || u.multi) {
         sel = sel.includes(id) ? sel.filter((i) => i !== id) : [...sel, id]
         dispatch({ type: 'select', ids: sel })
         if (!sel.includes(id)) return
@@ -356,7 +454,14 @@ export function BoardSurface() {
         const it = snapRef.current.all.get(sid)
         if (it) orig.set(sid, { x: it.x, y: it.y })
       }
-      inter.current = { kind: 'move', start: wp, orig, ids: sel, moved: false }
+      // a tap on the note that was already selected edits it
+      inter.current = { kind: 'move', start: wp, orig, ids: sel, moved: false, tapEdit: touch && wasOnly ? id : null }
+      if (touch) armLongPress(e)
+      return
+    }
+    if (touch) {
+      inter.current = { kind: 'press', sx: e.clientX, sy: e.clientY, start: wp, cam: { ...camApi.camRef.current }, long: false }
+      armLongPress(e)
       return
     }
     if (!e.shiftKey) dispatch({ type: 'select', ids: [] })
@@ -369,10 +474,29 @@ export function BoardSurface() {
     lastWorld.current = wp
     sendCursor(wp)
     const it = inter.current
-    if (!it) return
+    if (!it || (it.kind !== 'pinch' && e.pointerId !== active.current.id)) return
     const z = camApi.camRef.current.z
 
     switch (it.kind) {
+      case 'press': {
+        if (Math.hypot(e.clientX - it.sx, e.clientY - it.sy) < SLOP) return
+        clearPress()
+        if (it.long) {
+          closeMenu()
+          inter.current = { kind: 'marquee', start: it.start, base: uiRef.current.multi ? uiRef.current.selection : [] }
+        } else {
+          dispatch({ type: 'follow', clientId: null })
+          inter.current = { kind: 'pan', sx: it.sx, sy: it.sy, cam: it.cam }
+        }
+        return onPointerMove(e)
+      }
+      case 'scroll': {
+        const dy = e.clientY - it.sy
+        if (!it.active && Math.abs(dy) < SLOP) return
+        it.active = true
+        it.el.scrollTop = it.st - dy
+        return
+      }
       case 'pinch': {
         if (pointers.current.size < 2) return
         const [a, b] = [...pointers.current.values()]
@@ -391,8 +515,9 @@ export function BoardSurface() {
       case 'move': {
         const dx = wp.x - it.start.x
         const dy = wp.y - it.start.y
-        if (!it.moved && Math.hypot(dx, dy) * z < 3) return
+        if (!it.moved && Math.hypot(dx, dy) * z < (e.pointerType === 'touch' ? SLOP : 3)) return
         if (!it.moved) {
+          clearPress()
           it.moved = true
           setMoving(true)
         }
@@ -475,17 +600,33 @@ export function BoardSurface() {
     const it = inter.current
     if (!it) return
     if (it.kind === 'pinch') {
-      if (pointers.current.size < 2) inter.current = null
+      if (pointers.current.size >= 2) return startPinch() // a third finger was down: pinch with it from here
+      // the finger left behind carries on panning
+      const rest = pointers.current.size === 1 ? [...pointers.current][0] : null
+      if (rest) active.current = { id: rest[0], type: 'touch' }
+      inter.current = rest ? { kind: 'pan', sx: rest[1].x, sy: rest[1].y, cam: { ...camApi.camRef.current } } : null
       return
     }
+    if (e.pointerId !== active.current.id) return
+    clearPress()
     inter.current = null
     try {
       hostRef.current?.releasePointerCapture(e.pointerId)
     } catch {
       /* already released */
     }
+    const tap = e.type === 'pointerup' && e.pointerType === 'touch'
     switch (it.kind) {
+      case 'press':
+        if (it.long || !tap) break
+        if (!uiRef.current.multi) dispatch({ type: 'select', ids: [] })
+        tapped(e)
+        break
       case 'move':
+        if (!it.moved && tap) {
+          if (it.tapEdit && snapRef.current.all.get(it.tapEdit)?.type === 'note') dispatch({ type: 'editing', id: it.tapEdit })
+          tapped(e)
+        }
         if (it.moved && dropTarget) {
           const folder = snapRef.current.all.get(dropTarget)
           const moved = store.reparent(it.ids, dropTarget)
@@ -507,7 +648,7 @@ export function BoardSurface() {
         setMoving(false)
         break
       case 'draw':
-        if (e.type !== 'pointercancel') commitStroke(it.points, it.tool)
+        if (e.type !== 'pointercancel') commitStroke(it.points)
         draftRef.current = null
         setDraft(null)
         sendDraft(null, true)
@@ -522,7 +663,21 @@ export function BoardSurface() {
     [preview],
   )
 
+  /** Touch has no dblclick here (the board takes every touch), so two quick taps stand in. */
+  const tapped = (e: { clientX: number; clientY: number; target: EventTarget }) => {
+    const now = performance.now()
+    const p = lastTap.current
+    if (p && now - p.t < 350 && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 30) {
+      lastTap.current = null
+      openAt(e)
+    } else lastTap.current = { t: now, x: e.clientX, y: e.clientY }
+  }
+
   const onDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (lastPointerType === 'mouse') openAt(e)
+  }
+
+  const openAt = (e: { clientX: number; clientY: number; target: EventTarget }) => {
     const t = e.target as HTMLElement
     if (t.closest('button, input, a, textarea, [data-nodrag], .ProseMirror')) return
     // pointer capture on the host retargets dblclick to the host, so find the item by position
@@ -547,6 +702,12 @@ export function BoardSurface() {
 
   // ---- right-click menu ----
   const onContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isTyping(e.target)) return // native menu (spellcheck, copy/paste) inside text
+    if (lastPointerType === 'touch') return e.preventDefault() // long-press comes from the gestures above
+    showMenu(e)
+  }
+
+  const showMenu = (e: MenuEvent) => {
     const t = e.target as HTMLElement
     if (isTyping(t)) return // native menu (spellcheck, copy/paste) inside text
     if (t.closest('[data-nodrag]') && !t.closest('[data-item-id]')) return e.preventDefault()
@@ -893,7 +1054,7 @@ export function BoardSurface() {
         if (b) camApi.fitRect(b, 120, 2)
         return
       }
-      const tools: Record<string, typeof u.tool> = { v: 'select', h: 'hand', p: e.shiftKey ? 'highlighter' : 'pen', e: 'eraser', n: 'note', f: 'folder', k: 'link' }
+      const tools: Record<string, typeof u.tool> = { v: 'select', h: 'hand', p: 'pen', e: 'eraser', n: 'note', f: 'folder', k: 'link' }
       if (tools[k]) dispatch({ type: 'tool', tool: tools[k] })
     }
 
@@ -922,7 +1083,7 @@ export function BoardSurface() {
   }, [store, camApi, dispatch, session, placeItem, pasteText, pasteFiles, clipText, afterCopy, previewIfPossible])
 
   const cursorClass =
-    spaceDown || ui.tool === 'hand' ? s.grab : ui.tool === 'pen' || ui.tool === 'highlighter' || ui.tool === 'eraser' ? s.crosshair : ui.tool === 'select' ? '' : s.place
+    spaceDown || ui.tool === 'hand' ? s.grab : ui.tool === 'pen' || ui.tool === 'eraser' ? s.crosshair : ui.tool === 'select' ? '' : s.place
 
   const hostStyle = {
     '--z': cam.z,
@@ -978,7 +1139,11 @@ export function BoardSurface() {
       {snap.surface.length === 0 && ui.tool === 'select' && (
         <div className={s.empty}>
           <b>An empty board.</b>
-          <span>Double-click to add a note · drop files here · press P to draw · share the link to invite people</span>
+          <span>
+            {coarse
+              ? 'Double-tap to add a note · hold for more · pinch to zoom · share the link to invite people'
+              : 'Double-click to add a note · drop files here · press P to draw · share the link to invite people'}
+          </span>
         </div>
       )}
     </div>

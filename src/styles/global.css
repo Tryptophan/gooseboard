@@ -17,6 +17,11 @@
   --shadow-lg: 0 10px 40px rgba(16, 24, 40, 0.25);
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color-scheme: light;
+  /* notch / home-indicator insets (needs viewport-fit=cover) */
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
 }
 :root[data-theme='dark'] {
   --bg: #14161a;

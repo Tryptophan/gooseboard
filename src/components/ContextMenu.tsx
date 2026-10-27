@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { lastWasTouch } from '../lib/touch'
 import { Icon } from './Icons'
 import s from './ContextMenu.module.css'
 
@@ -14,6 +15,7 @@ interface Open {
 }
 
 let current: Open | null = null
+let openedAt = 0
 const listeners = new Set<() => void>()
 const set = (o: Open | null) => {
   current = o
@@ -24,6 +26,8 @@ const set = (o: Open | null) => {
 export function openMenu(e: { clientX: number; clientY: number; preventDefault(): void; stopPropagation(): void }, entries: (MenuEntry | false | null | undefined)[]) {
   e.preventDefault()
   e.stopPropagation()
+  // a touch long-press can open it twice: our timer and Android's native contextmenu
+  if (lastWasTouch() && current && performance.now() - openedAt < 1000) return
   // no leading, trailing or doubled separators once conditional entries drop out
   const clean: MenuEntry[] = []
   for (const x of entries) {
@@ -31,7 +35,9 @@ export function openMenu(e: { clientX: number; clientY: number; preventDefault()
     clean.push(x)
   }
   if (clean[clean.length - 1] === 'sep') clean.pop()
-  if (clean.length) set({ x: e.clientX, y: e.clientY, entries: clean })
+  if (!clean.length) return
+  openedAt = performance.now()
+  set({ x: e.clientX, y: e.clientY, entries: clean })
 }
 
 export const closeMenu = () => set(null)

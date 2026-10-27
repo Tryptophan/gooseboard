@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useSyncExternalStore, type Dispatch, type ReactNode } from 'react'
 import { getTheme, saveTheme, type ThemePref } from '../lib/storage'
+import { primeKeyboard } from '../lib/touch'
 import { PEN_COLORS } from '../model/types'
 
-export type Tool = 'select' | 'hand' | 'pen' | 'highlighter' | 'eraser' | 'note' | 'folder' | 'link'
+export type Tool = 'select' | 'hand' | 'pen' | 'eraser' | 'note' | 'folder' | 'link'
 
 export interface BrushSettings {
   color: string
@@ -12,13 +13,14 @@ export interface BrushSettings {
 export interface UiState {
   tool: Tool
   selection: string[]
+  /** touch stand-in for Shift: taps add to / remove from the selection */
+  multi: boolean
   /** note (or empty link card) currently being edited */
   editing: string | null
   openFolder: string | null
   /** note open in the large editor window */
   noteModal: string | null
   pen: BrushSettings
-  highlighter: BrushSettings
   /** awareness client id being followed */
   follow: number | null
   theme: ThemePref
@@ -28,11 +30,11 @@ export type UiAction =
   | { type: 'tool'; tool: Tool }
   | { type: 'select'; ids: string[] }
   | { type: 'toggle'; id: string }
+  | { type: 'multi'; on: boolean }
   | { type: 'editing'; id: string | null }
   | { type: 'folder'; id: string | null }
   | { type: 'noteModal'; id: string | null }
   | { type: 'pen'; patch: Partial<BrushSettings> }
-  | { type: 'highlighter'; patch: Partial<BrushSettings> }
   | { type: 'follow'; clientId: number | null }
   | { type: 'theme'; theme: ThemePref }
   | { type: 'reset' }
@@ -40,11 +42,13 @@ export type UiAction =
 function reducer(s: UiState, a: UiAction): UiState {
   switch (a.type) {
     case 'tool':
-      return { ...s, tool: a.tool, editing: null, selection: a.tool === 'select' ? s.selection : [] }
+      return { ...s, tool: a.tool, editing: null, selection: a.tool === 'select' ? s.selection : [], multi: a.tool === 'select' && s.multi }
     case 'select':
-      return { ...s, selection: a.ids, editing: s.editing && a.ids.includes(s.editing) ? s.editing : null }
+      return { ...s, selection: a.ids, multi: s.multi && a.ids.length > 0, editing: s.editing && a.ids.includes(s.editing) ? s.editing : null }
     case 'toggle':
       return { ...s, selection: s.selection.includes(a.id) ? s.selection.filter((i) => i !== a.id) : [...s.selection, a.id] }
+    case 'multi':
+      return { ...s, multi: a.on }
     case 'editing':
       return { ...s, editing: a.id, selection: a.id ? [a.id] : s.selection }
     case 'folder':
@@ -54,25 +58,23 @@ function reducer(s: UiState, a: UiAction): UiState {
       return { ...s, noteModal: a.id, editing: a.id ? null : s.editing }
     case 'pen':
       return { ...s, pen: { ...s.pen, ...a.patch } }
-    case 'highlighter':
-      return { ...s, highlighter: { ...s.highlighter, ...a.patch } }
     case 'follow':
       return { ...s, follow: a.clientId }
     case 'theme':
       return { ...s, theme: a.theme }
     case 'reset':
-      return { ...s, tool: 'select', selection: [], editing: null, openFolder: null, noteModal: null, follow: null }
+      return { ...s, tool: 'select', selection: [], multi: false, editing: null, openFolder: null, noteModal: null, follow: null }
   }
 }
 
 const initial = (): UiState => ({
   tool: 'select',
   selection: [],
+  multi: false,
   editing: null,
   openFolder: null,
   noteModal: null,
-  pen: { color: PEN_COLORS[0], size: 4 },
-  highlighter: { color: '#ffd400', size: 8 },
+  pen: { color: PEN_COLORS[0], size: 10 },
   follow: null,
   theme: getTheme(),
 })
@@ -113,7 +115,14 @@ export function UiProvider({ children }: { children: ReactNode }) {
     mq.addEventListener('change', h)
     return () => mq.removeEventListener('change', h)
   }, [state.theme])
-  const d = useMemo(() => dispatch, [])
+  const d = useMemo<Dispatch<UiAction>>(
+    () => (a) => {
+      // still inside the tap that asked for an editor, so iOS will open the keyboard
+      if ((a.type === 'editing' || a.type === 'noteModal') && a.id) primeKeyboard()
+      dispatch(a)
+    },
+    [],
+  )
   return (
     <DispatchCtx.Provider value={d}>
       <StateCtx.Provider value={state}>{children}</StateCtx.Provider>

@@ -5,6 +5,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import type * as Y from 'yjs'
 import { fragmentToHTML, noteExtensions, toggleTask } from '../model/noteSchema'
 import type { NoteItem } from '../model/types'
+import { useCoarse } from '../lib/touch'
 import { useSession, useSnapshot } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
 import { Icon } from './Icons'
@@ -19,6 +20,7 @@ export function NoteBody({ item, editing }: { item: NoteItem; editing: boolean }
 
 function NoteStatic({ fragment, color }: { fragment: Y.XmlFragment; color: string }) {
   const { store } = useSession()
+  const coarse = useCoarse()
   const [html, setHtml] = useState(() => fragmentToHTML(fragment))
   useEffect(() => {
     let raf = 0
@@ -44,7 +46,7 @@ function NoteStatic({ fragment, color }: { fragment: Y.XmlFragment; color: strin
   }
   return (
     <div className={s.box} style={{ background: color }}>
-      <div className={s.prose} onClick={onClick} dangerouslySetInnerHTML={{ __html: html || '<p class="empty">Double-click to write…</p>' }} />
+      <div className={s.prose} onClick={onClick} dangerouslySetInnerHTML={{ __html: html || `<p class="empty">${coarse ? 'Double-tap' : 'Double-click'} to write…</p>` }} />
     </div>
   )
 }

@@ -91,13 +91,13 @@ function ZoomControls() {
   }
   return (
     <div className={chrome.zoom} data-nodrag>
-      <button title="Zoom out  Ctrl+-" onClick={() => camApi.zoomTo(camApi.cam.z / 1.25)}>
+      <button className={chrome.step} title="Zoom out  Ctrl+-" onClick={() => camApi.zoomTo(camApi.cam.z / 1.25)}>
         <Icon name="minus" size={16} />
       </button>
       <button title="Reset to 100%  Ctrl+0" onClick={() => camApi.zoomTo(1)}>
         {Math.round(camApi.cam.z * 100)}%
       </button>
-      <button title="Zoom in  Ctrl+=" onClick={() => camApi.zoomTo(camApi.cam.z * 1.25)}>
+      <button className={chrome.step} title="Zoom in  Ctrl+=" onClick={() => camApi.zoomTo(camApi.cam.z * 1.25)}>
         <Icon name="plus" size={16} />
       </button>
       <button title="Zoom to fit everything  Shift+1" onClick={fit}>

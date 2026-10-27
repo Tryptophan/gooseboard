@@ -1,4 +1,4 @@
-.box { position: absolute; inset: 0; border-radius: 4px 4px 4px 14px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 6px 16px rgba(0,0,0,.14); }
+.box { position: absolute; inset: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 6px 16px rgba(0,0,0,.14); }
 .prose {
   height: 100%;
   overflow: auto;
@@ -58,3 +58,14 @@
 }
 .close:hover { background: #fff; }
 .prose.big { flex: 1; height: auto; min-height: 0; padding: 16px 24px 24px; font-size: 17px; line-height: 1.5; }
+
+/* phones: the note window fills the screen */
+@media (max-width: 720px) {
+  .backdrop { padding: 0; }
+  .window { width: 100%; height: 100%; border-radius: 0; padding: var(--sat) var(--sar) var(--sab) var(--sal); }
+  .prose.big { padding: 12px 16px 24px; }
+}
+@media (pointer: coarse) {
+  .toolbar button { width: 38px; height: 38px; }
+  .close { width: 40px; height: 40px; }
+}

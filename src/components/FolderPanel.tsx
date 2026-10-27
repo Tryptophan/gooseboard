@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointer
 import { formatSize, kindOf } from '../lib/files'
 import type { Vec } from '../lib/geometry'
 import { toast } from '../lib/toast'
+import { lastWasTouch, longPressMenu, useCoarse } from '../lib/touch'
 import { normalizeUrl } from '../lib/url'
 import { addDropItems, pickFiles, readDrop } from '../model/actions'
 import { fragmentToText } from '../model/noteSchema'
@@ -284,6 +285,7 @@ function VirtualBody({ folder, drag, hover }: { folder: FolderItem; drag: StartD
   const dispatch = useUiDispatch()
   const [over, setOver] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
+  const coarse = useCoarse()
   const kids = snap.children.get(folder.id) ?? []
 
   const add = (init: Record<string, any> & { type: Item['type'] }) => store.add({ ...init, parent: folder.id })
@@ -361,7 +363,7 @@ function VirtualBody({ folder, drag, hover }: { folder: FolderItem; drag: StartD
               />
             ))}
           </div>
-          <p className={s.hint}>Double-click to open. Drag onto the board, a folder or the path above to move.</p>
+          <p className={s.hint}>{coarse ? 'Tap to open, hold for more.' : 'Double-click to open. Drag onto the board, a folder or the path above to move.'}</p>
         </>
       )}
     </div>
@@ -429,9 +431,12 @@ function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, on
       data-drop={item.type === 'folder' && item.mode === 'virtual' ? item.id : undefined}
       onPointerDown={(e) => {
         onSelect()
+        longPressMenu(e)
         drag(e, { kind: 'item', item, label: title || 'Item' })
       }}
-      onDoubleClick={(e) => !(e.target as HTMLElement).closest('button, a') && open()}
+      // touch: one tap opens (long-press is the menu)
+      onClick={(e) => lastWasTouch() && !(e.target as HTMLElement).closest('button, a') && open()}
+      onDoubleClick={(e) => !lastWasTouch() && !(e.target as HTMLElement).closest('button, a') && open()}
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget) return
         // handled here, not by the board shortcuts underneath
@@ -496,6 +501,7 @@ function DiskBody({ folder, path, setPath, drag }: { folder: FolderItem; path: s
   const [note, setNote] = useState('')
   const [tick, setTick] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
+  const coarse = useCoarse()
   const mine = folder.owner === profile.id
   const rel = path.join('/')
 
@@ -550,7 +556,7 @@ function DiskBody({ folder, path, setPath, drag }: { folder: FolderItem; path: s
               />
             ))}
           </div>
-          <p className={s.hint}>Double-click to open. Drag a file onto the board or a folder to add a copy.</p>
+          <p className={s.hint}>{coarse ? 'Tap to open, hold for more.' : 'Double-click to open. Drag a file onto the board or a folder to add a copy.'}</p>
         </>
       )}
     </div>
@@ -612,9 +618,11 @@ function Entry({ folder, entry, path, selected, onSelect, drag, onOpen }: EntryP
       tabIndex={0}
       onPointerDown={(e) => {
         onSelect()
+        longPressMenu(e)
         if (isFile) drag(e, { kind: 'entry', folder, entry, path, label: entry.name })
       }}
-      onDoubleClick={(e) => !(e.target as HTMLElement).closest('button') && open()}
+      onClick={(e) => lastWasTouch() && !(e.target as HTMLElement).closest('button') && open()}
+      onDoubleClick={(e) => !lastWasTouch() && !(e.target as HTMLElement).closest('button') && open()}
       onKeyDown={(e) => {
         if (e.key !== 'Enter' || e.target !== e.currentTarget) return
         e.stopPropagation()

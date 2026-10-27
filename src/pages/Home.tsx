@@ -100,7 +100,7 @@ export default function Home() {
         <img src={`${import.meta.env.BASE_URL}favicon.svg`} width={44} height={44} alt="" />
         <div>
           <h1>Gooseboard</h1>
-          <p>A collaborative infinite board. Notes, ink, files and folders, shared live between browsers. No accounts, no uploads.</p>
+          <p>A collaborative decentralized board. Notes, ink, files and folders, shared live between browsers. No accounts, no cloud.</p>
         </div>
         <button className={s.theme} onClick={theme.toggle} title={theme.dark ? 'Switch to light theme' : 'Switch to dark theme'}>
           <Icon name={theme.dark ? 'moon' : 'sun'} size={18} />
@@ -195,6 +195,12 @@ export default function Home() {
 
       <footer className={s.foot}>
         Your boards go straight from your browser to the people you share them with. There’s no Gooseboard server in the middle, and no account to sign up for. Files you add stay on your computer and are sent only when someone opens them. Small files are copied to everyone on the board so they’re always handy.
+        <p className={s.source}>
+          <a href="https://github.com/Tryptophan/gooseboard" target="_blank" rel="noopener noreferrer">
+            Source on GitHub
+          </a>{' '}
+          · MIT licensed
+        </p>
       </footer>
     </main>
   )

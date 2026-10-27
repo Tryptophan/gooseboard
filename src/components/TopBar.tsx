@@ -121,7 +121,7 @@ export function TopBar({ boardId }: { boardId: string }) {
         />
         <button className={s.status} onClick={() => setShowConn(!showConn)} title="Connection status">
           <span className={`${s.led} ${up > 0 ? s.ledOk : s.ledBad}`} />
-          {up > 0 ? (others ? `${others + 1} people` : 'Just you') : 'Offline'}
+          <span className={s.label}>{up > 0 ? (others ? `${others + 1} people` : 'Just you') : 'Offline'}</span>
         </button>
       </div>
 
@@ -164,8 +164,8 @@ export function TopBar({ boardId }: { boardId: string }) {
         <button className={s.iconBtn} title={theme.dark ? 'Switch to light theme' : 'Switch to dark theme'} onClick={theme.toggle}>
           <Icon name={theme.dark ? 'moon' : 'sun'} size={18} />
         </button>
-        <button className={s.shareBtn} onClick={() => void share()}>
-          <Icon name="share" size={16} /> Share
+        <button className={s.shareBtn} onClick={() => void share()} aria-label="Share">
+          <Icon name="share" size={16} /> <span className={s.label}>Share</span>
         </button>
         </div>
       </div>

@@ -41,3 +41,21 @@
 .child.selected { border-color: var(--accent); background: var(--accent-soft); }
 .folderBtn { cursor: default; }
 .ghost { position: fixed; z-index: 130; pointer-events: none; transform: translate(12px, 10px); max-width: 220px; padding: 5px 10px; border-radius: 8px; background: var(--panel); border: 1px solid var(--accent); box-shadow: var(--shadow-lg); font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* phones: full-width sheet between the top bar and the toolbar */
+@media (max-width: 720px) {
+  .panel { top: calc(62px + var(--sat)); left: calc(8px + var(--sal)); right: calc(8px + var(--sar)); bottom: calc(76px + var(--sab)); width: auto; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+}
+/* no hover on touch: file actions always shown; bigger targets */
+@media (hover: none) {
+  .childActions { opacity: 1; }
+}
+@media (pointer: coarse) {
+  .childActions button, .childActions a { width: 32px; height: 32px; }
+  .colors { gap: 6px; }
+  .colors button { width: 22px; height: 22px; }
+  .close { width: 40px; height: 40px; }
+  .actions button { padding: 9px 12px; }
+  .child { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+}

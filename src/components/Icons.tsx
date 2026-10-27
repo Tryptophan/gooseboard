@@ -4,7 +4,6 @@ const P: Record<string, ReactNode> = {
   select: <path d="M5 3l14 8-6 2-3 6z" />,
   hand: <path d="M8 13V5.5a1.5 1.5 0 013 0V11m0-6.5a1.5 1.5 0 013 0V11m0-4.5a1.5 1.5 0 013 0V13m0-3.5a1.5 1.5 0 013 0V15a6 6 0 01-6 6h-1.5a6 6 0 01-4.7-2.3L4 14.5a1.6 1.6 0 012.4-2L8 14" />,
   pen: <path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 013 3L8 19zM14.5 6.5l3 3" />,
-  highlighter: <path d="M9 14l6-6 3 3-6 6H9zM9 17l-3 3h5M15 8l2-2 3 3-2 2" />,
   eraser: <path d="M8 20h12M5.5 14.5l8-8a2 2 0 013 0l2 2a2 2 0 010 3l-7 7H8.5a2 2 0 01-1.4-.6l-1.6-1.6a2 2 0 010-2.8z" />,
   note: <path d="M5 4h14v10l-6 6H5zM13 20v-6h6" />,
   folder: <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />,

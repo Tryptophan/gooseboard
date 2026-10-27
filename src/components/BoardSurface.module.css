@@ -6,6 +6,13 @@
   background-position: var(--ox) var(--oy);
 }
 .host.noGrid { background-image: none; }
+/* every touch is the board's: scrollable bits (long notes) would otherwise take a drag as a native scroll */
+.host * { touch-action: none; }
+/* no iOS callout / Android image drag on long-press: the board's own menu opens instead */
+.host { -webkit-touch-callout: none; }
+.host img { -webkit-user-drag: none; }
+/* iOS can't place a caret in text whose ancestors are user-select: none */
+.host input, .host :global(.ProseMirror) { -webkit-user-select: text; user-select: text; }
 .grab { cursor: grab; }
 .crosshair { cursor: crosshair; }
 .place { cursor: copy; }
@@ -50,7 +57,7 @@
 .contextBar .danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger-strong); }
 .swatch { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border); padding: 0; cursor: pointer; margin: 0 2px; flex: none; }
 .contextBar .swatch { width: 20px; height: 20px; }
-.rainbow { background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red); position: relative; overflow: hidden; }
+.rainbow, .contextBar .rainbow { background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red); position: relative; overflow: hidden; }
 .sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
 
 .empty {
@@ -58,3 +65,14 @@
   display: flex; flex-direction: column; gap: 6px; pointer-events: none; font-size: 14px; max-width: 80vw;
 }
 .empty b { font-size: 18px; color: var(--text); }
+
+/* fingers: bigger hit areas round the handles, bigger buttons in the bar */
+@media (pointer: coarse) {
+  .handle::after, .rotHandle::after { content: ''; position: absolute; inset: calc(-12px / var(--z)); border-radius: 50%; }
+  /* max-content: near the right edge the bar would otherwise shrink-wrap into a column */
+  .contextBar { width: max-content; max-width: calc(100vw - 16px); }
+  .contextRow { flex-wrap: wrap; }
+  .contextBar button { width: 40px; height: 40px; }
+  .contextBar .swatch { width: 26px; height: 26px; }
+  .contextBar button.on { background: var(--accent-soft); color: var(--accent); }
+}

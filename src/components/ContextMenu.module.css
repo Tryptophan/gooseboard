@@ -9,3 +9,10 @@
 .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hint { color: var(--muted); font-size: 11.5px; }
 .sep { height: 1px; margin: 4px 6px; background: var(--border); }
+
+/* fingers: taller rows; keyboard hints don't apply */
+@media (pointer: coarse) {
+  .menu { font-size: 15px; min-width: 220px; }
+  .menu button { padding: 11px 10px; }
+  .hint { display: none; }
+}
