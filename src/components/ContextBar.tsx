@@ -2,15 +2,18 @@ import { clamp, unionBounds } from '../lib/geometry'
 import { FOLDER_COLORS, NOTE_COLORS, PEN_COLORS, type Item } from '../model/types'
 import { useCamera } from '../state/camera'
 import { useSession } from '../state/session'
-import { useUiDispatch } from '../state/ui'
+import { useUi, useUiDispatch } from '../state/ui'
 import { ColorPicker } from './ColorPicker'
 import { Icon } from './Icons'
+import { NoteToolbar, useBoardNoteEditor } from './Note'
 import s from './BoardSurface.module.css'
 
 /** Floating actions above the current selection. */
 export function ContextBar({ items }: { items: Item[] }) {
   const { store } = useSession()
   const dispatch = useUiDispatch()
+  const { editing } = useUi()
+  const noteEditor = useBoardNoteEditor()
   const { cam, size } = useCamera()
   const b = unionBounds(items)
   if (!b) return null
@@ -27,66 +30,72 @@ export function ContextBar({ items }: { items: Item[] }) {
   // onStart/onEnd of one drag come from the same render, so they share this
   let captureTimeout = 0
 
+  const textEditor = only?.type === 'note' && editing === only.id ? noteEditor : null
+
   const left = clamp((b.x + b.w / 2) * cam.z + cam.x, 150, Math.max(150, size.w - 150))
-  // clear of the rotate handle (34px above the item)
-  let top = b.y * cam.z + cam.y - (only ? 92 : 54)
-  if (top < 70) top = (b.y + b.h) * cam.z + cam.y + (types.has('note') ? 52 : 14)
+  // bottom edge clears the rotate handle (34px above the item), which is hidden while editing
+  const above = b.y * cam.z + cam.y - (only && !editing ? 50 : 12)
+  const flip = above - (textEditor ? 84 : 42) < 70
+  const top = flip ? (b.y + b.h) * cam.z + cam.y + 14 : above
 
   return (
-    <div className={s.contextBar} style={{ left, top }} data-nodrag>
-      {palette && (
-        <>
-          {palette.map((c) => (
-            <button key={c} className={s.swatch} style={{ background: c }} onClick={() => setColor(c)} aria-label={`Color ${c}`} />
-          ))}
-          <ColorPicker
-            className={`${s.swatch} ${s.rainbow}`}
-            value={(items[0] as { color?: string }).color}
-            onChange={(c) => store.updateMany(Object.fromEntries(ids.map((id) => [id, { color: c }])))}
-            onStart={() => {
-              // one undo step per drag, however long it pauses
-              store.undo.stopCapturing()
-              captureTimeout = store.undo.captureTimeout
-              store.undo.captureTimeout = Infinity
-            }}
-            onEnd={() => {
-              store.undo.captureTimeout = captureTimeout
-              store.undo.stopCapturing()
-            }}
-          />
-          <span className={s.sep} />
-        </>
-      )}
-      {only?.type === 'note' && (
-        <button title="Open in window  Shift+Enter" onClick={() => dispatch({ type: 'noteModal', id: only.id })}>
-          <Icon name="expand" size={17} />
+    <div className={s.contextBar} style={{ left, top, transform: flip ? 'translateX(-50%)' : 'translate(-50%, -100%)' }} data-nodrag>
+      {textEditor && <NoteToolbar editor={textEditor} variant="bare" />}
+      <div className={s.contextRow}>
+        {palette && (
+          <>
+            {palette.map((c) => (
+              <button key={c} className={s.swatch} style={{ background: c }} onClick={() => setColor(c)} aria-label={`Color ${c}`} />
+            ))}
+            <ColorPicker
+              className={`${s.swatch} ${s.rainbow}`}
+              value={(items[0] as { color?: string }).color}
+              onChange={(c) => store.updateMany(Object.fromEntries(ids.map((id) => [id, { color: c }])))}
+              onStart={() => {
+                // one undo step per drag, however long it pauses
+                store.undo.stopCapturing()
+                captureTimeout = store.undo.captureTimeout
+                store.undo.captureTimeout = Infinity
+              }}
+              onEnd={() => {
+                store.undo.captureTimeout = captureTimeout
+                store.undo.stopCapturing()
+              }}
+            />
+            <span className={s.sep} />
+          </>
+        )}
+        {only?.type === 'note' && (
+          <button title="Open in window  Shift+Enter" onClick={() => dispatch({ type: 'noteModal', id: only.id })}>
+            <Icon name="expand" size={17} />
+          </button>
+        )}
+        {only?.type === 'folder' && (
+          <button title="Open folder" onClick={() => dispatch({ type: 'folder', id: only.id })}>
+            <Icon name="folder" size={17} />
+          </button>
+        )}
+        <button title="Bring to front  ]" onClick={() => store.bringToFront(ids)}>
+          <Icon name="front" size={17} />
         </button>
-      )}
-      {only?.type === 'folder' && (
-        <button title="Open folder" onClick={() => dispatch({ type: 'folder', id: only.id })}>
-          <Icon name="folder" size={17} />
+        <button title="Send to back  [" onClick={() => store.sendToBack(ids)}>
+          <Icon name="back" size={17} />
         </button>
-      )}
-      <button title="Bring to front  ]" onClick={() => store.bringToFront(ids)}>
-        <Icon name="front" size={17} />
-      </button>
-      <button title="Send to back  [" onClick={() => store.sendToBack(ids)}>
-        <Icon name="back" size={17} />
-      </button>
-      <button title="Duplicate  Ctrl+D" onClick={() => dispatch({ type: 'select', ids: store.duplicate(ids) })}>
-        <Icon name="copy" size={17} />
-      </button>
-      <button
-        title="Delete  Del"
-        className={s.danger}
-        onClick={() => {
-          store.undo.stopCapturing()
-          store.remove(ids)
-          dispatch({ type: 'select', ids: [] })
-        }}
-      >
-        <Icon name="trash" size={17} />
-      </button>
+        <button title="Duplicate  Ctrl+D" onClick={() => dispatch({ type: 'select', ids: store.duplicate(ids) })}>
+          <Icon name="copy" size={17} />
+        </button>
+        <button
+          title="Delete  Del"
+          className={s.danger}
+          onClick={() => {
+            store.undo.stopCapturing()
+            store.remove(ids)
+            dispatch({ type: 'select', ids: [] })
+          }}
+        >
+          <Icon name="trash" size={17} />
+        </button>
+      </div>
     </div>
   )
 }

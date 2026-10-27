@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { EditorContent, useEditor, type Editor } from '@tiptap/react'
 import Collaboration from '@tiptap/extension-collaboration'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -14,11 +14,10 @@ export function NoteBody({ item, editing }: { item: NoteItem; editing: boolean }
   const { store } = useSession()
   const fragment = useMemo(() => store.noteFragment(item.id), [store, item.id])
   if (!fragment) return null
-  return editing ? <NoteEditor fragment={fragment} color={item.color} /> : <NoteStatic id={item.id} fragment={fragment} color={item.color} />
+  return editing ? <NoteEditor fragment={fragment} color={item.color} /> : <NoteStatic fragment={fragment} color={item.color} />
 }
 
-function NoteStatic({ id, fragment, color }: { id: string; fragment: Y.XmlFragment; color: string }) {
-  const dispatch = useUiDispatch()
+function NoteStatic({ fragment, color }: { fragment: Y.XmlFragment; color: string }) {
   const { store } = useSession()
   const [html, setHtml] = useState(() => fragmentToHTML(fragment))
   useEffect(() => {
@@ -46,9 +45,6 @@ function NoteStatic({ id, fragment, color }: { id: string; fragment: Y.XmlFragme
   return (
     <div className={s.box} style={{ background: color }}>
       <div className={s.prose} onClick={onClick} dangerouslySetInnerHTML={{ __html: html || '<p class="empty">Double-click to write…</p>' }} />
-      <button className={s.expand} title="Open in window  Shift+Enter" onClick={() => dispatch({ type: 'noteModal', id })} onDoubleClick={(e) => e.stopPropagation()}>
-        <Icon name="expand" size={14} />
-      </button>
     </div>
   )
 }
@@ -63,15 +59,32 @@ function useNoteEditor(fragment: Y.XmlFragment) {
   )
 }
 
+// the in-place editor lives in the zoomed world layer; its toolbar is drawn by the screen-space ContextBar
+let boardEditor: Editor | null = null
+const listeners = new Set<() => void>()
+const setBoardEditor = (e: Editor | null) => {
+  boardEditor = e
+  listeners.forEach((l) => l())
+}
+const subscribe = (l: () => void) => {
+  listeners.add(l)
+  return () => void listeners.delete(l)
+}
+export const useBoardNoteEditor = () => useSyncExternalStore(subscribe, () => boardEditor)
+
 function NoteEditor({ fragment, color }: { fragment: Y.XmlFragment; color: string }) {
   const editor = useNoteEditor(fragment)
+  useEffect(() => {
+    if (!editor) return
+    setBoardEditor(editor)
+    return () => {
+      if (boardEditor === editor) setBoardEditor(null)
+    }
+  }, [editor])
   return (
-    <>
-      <div className={s.box} style={{ background: color }}>
-        <EditorContent editor={editor} className={`${s.prose} ${s.editing}`} />
-      </div>
-      {editor && <Toolbar editor={editor} />}
-    </>
+    <div className={s.box} style={{ background: color }}>
+      <EditorContent editor={editor} className={`${s.prose} ${s.editing}`} />
+    </div>
   )
 }
 
@@ -102,7 +115,7 @@ function NoteWindow({ fragment, color, onClose }: { fragment: Y.XmlFragment; col
     <div className={s.backdrop} onClick={onClose} data-nodrag>
       <div className={s.window} style={{ background: color }} onClick={(e) => e.stopPropagation()}>
         <div className={s.windowHead}>
-          {editor && <Toolbar editor={editor} className={s.inline} />}
+          {editor && <NoteToolbar editor={editor} variant="inline" />}
           <button className={s.close} onClick={onClose} title="Close  Esc" aria-label="Close">
             <Icon name="close" size={16} />
           </button>
@@ -113,7 +126,7 @@ function NoteWindow({ fragment, color, onClose }: { fragment: Y.XmlFragment; col
   )
 }
 
-function Toolbar({ editor, className = '' }: { editor: Editor; className?: string }) {
+export function NoteToolbar({ editor, variant }: { editor: Editor; variant: 'inline' | 'bare' }) {
   const [, force] = useState(0)
   useEffect(() => {
     const h = () => force((n) => n + 1)
@@ -127,7 +140,7 @@ function Toolbar({ editor, className = '' }: { editor: Editor; className?: strin
   )
   const c = () => editor.chain().focus()
   return (
-    <div className={`${s.toolbar} ${className}`} data-nodrag>
+    <div className={`${s.toolbar} ${s[variant]}`} data-nodrag>
       {B('Bold', 'bold', () => c().toggleBold().run(), editor.isActive('bold'))}
       {B('Italic', 'italic', () => c().toggleItalic().run(), editor.isActive('italic'))}
       {B('Strike', 'strike', () => c().toggleStrike().run(), editor.isActive('strike'))}
