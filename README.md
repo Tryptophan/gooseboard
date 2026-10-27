@@ -1,6 +1,6 @@
 # Gooseboard
 
-Peer-to-peer infinite board: notes (rich text/markdown), freehand ink, files, folders and link cards, shared live between 2+ browsers over WebRTC. No accounts: your name/colour and board list live in `localStorage`, board data in IndexedDB.
+Collaborative infinite board: notes (rich text/markdown), freehand ink, files, folders and link cards, shared live peer-to-peer between 2+ browsers over WebRTC. No accounts, no uploads: your name/colour and board list live in `localStorage`, board data in IndexedDB, and files stream straight from the owner's disk.
 
 - **Stack:** Vite, React 18, TypeScript, Yjs (CRDT), y-webrtc (full mesh), Tiptap, perfect-freehand, CSS Modules.
 - **Boards:** `/#/board/<12-char base62 id>`. The id is the room name, so keep links private.
