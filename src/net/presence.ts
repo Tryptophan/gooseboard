@@ -4,7 +4,7 @@ import { ICE_SERVERS, ROOM_PREFIX } from '../config'
 import type { Profile } from '../lib/storage'
 import type { PresenceUser } from '../model/types'
 import { installSignaling, SIGNAL_URLS } from './signal'
-import { fixGlare } from './signal/glare'
+import { dropIfStuck, fixGlare } from './signal/glare'
 
 /**
  * Who is on a board right now, visible without opening it. The board room itself would sync the
@@ -72,7 +72,7 @@ function open(id: string): Room {
   return r
 }
 
-/** Same glare fix the board room gets (see signal/glare). */
+/** Same glare and stuck-handshake fixes the board room gets (see signal/glare). */
 function hookGlare(provider: WebrtcProvider) {
   const map: Map<string, any> | undefined = (provider as any).room?.webrtcConns
   if (!map) return
@@ -80,9 +80,13 @@ function hookGlare(provider: WebrtcProvider) {
   map.set = (peerId: string, conn: any) => {
     set(peerId, conn)
     fixGlare(conn, provider)
+    dropIfStuck(conn)
     return map
   }
-  map.forEach((conn) => fixGlare(conn, provider))
+  map.forEach((conn) => {
+    fixGlare(conn, provider)
+    dropIfStuck(conn)
+  })
 }
 
 function close(id: string) {

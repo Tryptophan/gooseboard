@@ -3,7 +3,7 @@ import { FRAME_SIZE, HIGH_WATER, LOW_WATER } from '../config'
 import { mimeOf } from '../lib/files'
 import type { Profile } from '../lib/storage'
 import type { Mirror } from './mirror'
-import { fixGlare } from './signal/glare'
+import { dropIfStuck, fixGlare } from './signal/glare'
 import type { LocalSources } from './sources'
 import { makeThumb } from './thumbs'
 import type { TransferStore } from './transfers'
@@ -192,6 +192,7 @@ export class P2P {
 
   private linkConn(peerId: string, conn: any) {
     fixGlare(conn, this.provider)
+    dropIfStuck(conn)
     const cur = this.links.get(peerId)
     if (cur && cur.conn === conn) return
     const link: Link = { peerId, conn }

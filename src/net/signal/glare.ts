@@ -28,3 +28,15 @@ export function fixGlare(conn: any, provider: any) {
     fresh.peer.signal(data)
   }
 }
+
+/**
+ * A handshake whose offer or answer got lost leaves a connection that never opens, and y-webrtc
+ * ignores announces from a peer it already has a connection for. Destroy it after a while: y-webrtc
+ * then forgets the peer and re-announces, so the next round can dial again.
+ */
+export function dropIfStuck(conn: any) {
+  if (conn.__stuckTimer) return
+  conn.__stuckTimer = setTimeout(() => {
+    if (!conn.connected && !conn.closed) conn.peer?.destroy()
+  }, 30_000)
+}

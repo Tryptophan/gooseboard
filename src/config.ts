@@ -4,6 +4,7 @@
  * Signaling only carries the (encrypted) WebRTC handshake; board data flows peer-to-peer.
  * Checked 2026-10-26: each one below delivered a test message between two clients;
  * relay.snort.social (no delivery), tracker.btorrent.xyz and relay.nostr.bg (unreachable) did not.
+ * offchain.pub dropped 2026-10-27 (connection refused).
  */
 export const NOSTR_RELAYS: string[] = [
   'wss://relay.damus.io',
@@ -11,7 +12,6 @@ export const NOSTR_RELAYS: string[] = [
   'wss://relay.primal.net',
   'wss://nostr.mom',
   'wss://relay.nostr.net',
-  'wss://offchain.pub',
 ]
 
 export const TORRENT_TRACKERS: string[] = [

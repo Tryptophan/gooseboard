@@ -16,7 +16,27 @@ import { TrackerSignal } from './torrent'
 const SCHEME = 'p2p-signal://'
 
 const listeners = new Set<() => void>()
-const statusChanged = () => listeners.forEach((l) => l())
+const statusChanged = () => {
+  listeners.forEach((l) => l())
+  reannounceSoon()
+}
+
+/**
+ * y-webrtc announces a room only when its socket opens, which is as soon as the first relay of a
+ * transport connects. If that one announce is lost (relay not up yet, rate-limited, peer not yet
+ * subscribed there), the two sides never meet. So replay the open whenever a relay or tracker
+ * comes up and every 30 s: y-webrtc re-subscribes and re-announces, and peers it is already
+ * connected to ignore the repeat.
+ */
+const REANNOUNCE_MS = 30_000
+const sockets = new Set<SignalSocket>()
+let reannounceTimer: ReturnType<typeof setTimeout> | null = null
+function reannounceSoon() {
+  reannounceTimer ??= setTimeout(() => {
+    reannounceTimer = null
+    sockets.forEach((s) => s.reannounce())
+  }, 1000)
+}
 
 const cache = new Map<string, Transport>()
 const makers: Record<string, () => Transport> = {
@@ -48,6 +68,12 @@ class SignalSocket implements Sink {
   constructor(private t: Transport) {
     // attach once lib0 has assigned its handlers
     queueMicrotask(() => this.readyState === 0 && t.attach(this))
+    sockets.add(this)
+  }
+
+  /** lib0's onopen emits 'connect', on which y-webrtc subscribes and announces every room */
+  reannounce() {
+    if (this.readyState === 1 && this.t.up) this.onopen?.({})
   }
 
   open() {
@@ -72,6 +98,7 @@ class SignalSocket implements Sink {
   close() {
     if (this.readyState === 3) return
     this.readyState = 3
+    sockets.delete(this)
     this.t.detach(this)
     this.onclose?.({})
   }
@@ -82,6 +109,7 @@ let installed = false
 export function installSignaling() {
   if (installed) return
   installed = true
+  setInterval(() => sockets.forEach((s) => s.reannounce()), REANNOUNCE_MS)
   const Patched = function (url: string | URL, protocols?: string | string[]) {
     const u = String(url)
     const t = u.startsWith(SCHEME) ? transport(u.slice(SCHEME.length)) : undefined
