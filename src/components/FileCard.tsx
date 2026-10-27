@@ -30,7 +30,14 @@ export function FileBody({ item }: { item: FileItem }) {
     <div className={`${s.card} ${s.file}`}>
       <div className={s.thumb}>
         {thumb ? <img src={thumb} alt="" draggable={false} /> : <TypeIcon name={item.name} mime={item.mime} />}
-        {kind === 'video' && thumb && <span className={s.play}>▶</span>}
+        {/* a drawn triangle: the ▶ glyph sits off-centre and turns into an emoji on some platforms */}
+        {kind === 'video' && thumb && (
+          <span className={s.play}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M9 6v12l10-6z" />
+            </svg>
+          </span>
+        )}
         <SyncBadge st={sync} mine={mine} />
       </div>
       <div className={s.cardInfo}>
