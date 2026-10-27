@@ -25,6 +25,7 @@ const P: Record<string, ReactNode> = {
   back: <path d="M4 4h11v11H4zM9 20h11V9h-5" />,
   download: <path d="M12 4v12M7 11l5 5 5-5M5 20h14" />,
   eye: <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z" />,
+  expand: <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />,
   close: <path d="M6 6l12 12M18 6L6 18" />,
   home: <path d="M4 11l8-7 8 7M6 10v10h12V10" />,
   up: <path d="M12 19V5M6 11l6-6 6 6" />,

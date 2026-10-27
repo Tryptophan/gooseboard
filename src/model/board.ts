@@ -199,13 +199,16 @@ export class BoardStore {
     this.transact(() => doomed.forEach((id) => this.items.delete(id)))
   }
 
-  reparent(ids: string[], parent: string | null) {
+  /** Moves items into `parent`; ink strokes only live on the canvas, so they never go into a folder. Returns the ids moved. */
+  reparent(ids: string[], parent: string | null): string[] {
     const patches: Record<string, Record<string, any>> = {}
     for (const id of ids) {
       if (id === parent || (parent && this.isDescendant(parent, id))) continue
+      if (parent && this.snap.all.get(id)?.type === 'stroke') continue
       patches[id] = { parent }
     }
     this.updateMany(patches)
+    return Object.keys(patches)
   }
 
   /** true if `id` sits (transitively) inside `ancestor` */

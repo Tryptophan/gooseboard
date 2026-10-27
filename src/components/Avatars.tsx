@@ -36,17 +36,22 @@ export function MoreChip({ hidden, onClick, children }: { hidden: string[]; onCl
   )
 }
 
-/** Read-only stack (home screen): who is on a board right now. */
+/** Read-only stack (home screen): who is on a board right now. Spans only, so it can sit inside a button. */
 export function AvatarStack({ users, budget }: { users: PresenceUser[]; budget: number }) {
   const n = fitAvatars(users.length, budget)
+  const hidden = users.slice(n).map((u) => u.name)
   return (
-    <div className={s.avatars}>
+    <span className={s.avatars}>
       {users.slice(0, n).map((u) => (
         <span key={u.id} className={`${s.avatar} ${s.static}`} style={{ background: u.color }} title={u.name}>
           {initial(u.name)}
         </span>
       ))}
-      {n < users.length && <MoreChip hidden={users.slice(n).map((u) => u.name)} />}
-    </div>
+      {hidden.length > 0 && (
+        <span className={`${s.avatar} ${s.more} ${s.static}`} title={hidden.join(', ')}>
+          +{hidden.length}
+        </span>
+      )}
+    </span>
   )
 }

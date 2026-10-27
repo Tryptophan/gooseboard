@@ -57,6 +57,11 @@ export function ContextBar({ items }: { items: Item[] }) {
           <span className={s.sep} />
         </>
       )}
+      {only?.type === 'note' && (
+        <button title="Open in window  Shift+Enter" onClick={() => dispatch({ type: 'noteModal', id: only.id })}>
+          <Icon name="expand" size={17} />
+        </button>
+      )}
       {only?.type === 'folder' && (
         <button title="Open folder" onClick={() => dispatch({ type: 'folder', id: only.id })}>
           <Icon name="folder" size={17} />

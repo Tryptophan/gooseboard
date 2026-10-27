@@ -15,6 +15,8 @@ export interface UiState {
   /** note (or empty link card) currently being edited */
   editing: string | null
   openFolder: string | null
+  /** note open in the large editor window */
+  noteModal: string | null
   pen: BrushSettings
   highlighter: BrushSettings
   /** awareness client id being followed */
@@ -28,6 +30,7 @@ export type UiAction =
   | { type: 'toggle'; id: string }
   | { type: 'editing'; id: string | null }
   | { type: 'folder'; id: string | null }
+  | { type: 'noteModal'; id: string | null }
   | { type: 'pen'; patch: Partial<BrushSettings> }
   | { type: 'highlighter'; patch: Partial<BrushSettings> }
   | { type: 'follow'; clientId: number | null }
@@ -46,6 +49,9 @@ function reducer(s: UiState, a: UiAction): UiState {
       return { ...s, editing: a.id, selection: a.id ? [a.id] : s.selection }
     case 'folder':
       return { ...s, openFolder: a.id }
+    case 'noteModal':
+      // one editor per note at a time: the window replaces in-place editing
+      return { ...s, noteModal: a.id, editing: a.id ? null : s.editing }
     case 'pen':
       return { ...s, pen: { ...s.pen, ...a.patch } }
     case 'highlighter':
@@ -55,7 +61,7 @@ function reducer(s: UiState, a: UiAction): UiState {
     case 'theme':
       return { ...s, theme: a.theme }
     case 'reset':
-      return { ...s, tool: 'select', selection: [], editing: null, openFolder: null, follow: null }
+      return { ...s, tool: 'select', selection: [], editing: null, openFolder: null, noteModal: null, follow: null }
   }
 }
 
@@ -64,6 +70,7 @@ const initial = (): UiState => ({
   selection: [],
   editing: null,
   openFolder: null,
+  noteModal: null,
   pen: { color: PEN_COLORS[0], size: 4 },
   highlighter: { color: '#ffd400', size: 8 },
   follow: null,

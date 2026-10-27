@@ -139,12 +139,14 @@ export default function Home() {
             {boards.map((b) => (
               <li key={b.id}>
                 <button className={s.open} onClick={() => nav(`/board/${b.id}`)}>
-                  <b>{b.name || 'Untitled board'}</b>
-                  <span>
-                    {b.id} · opened {ago(b.lastOpened)}
+                  <span className={s.label}>
+                    <b>{b.name || 'Untitled board'}</b>
+                    <span>
+                      {b.id} · opened {ago(b.lastOpened)}
+                    </span>
                   </span>
+                  <OnlineNow users={online[b.id] ?? []} />
                 </button>
-                <OnlineNow users={online[b.id] ?? []} />
                 <button
                   title="Rename"
                   onClick={async () => {
@@ -199,10 +201,10 @@ export default function Home() {
 }
 
 function OnlineNow({ users }: { users: PresenceUser[] }) {
-  const ref = useRef<HTMLDivElement>(null)
+  const ref = useRef<HTMLSpanElement>(null)
   const budget = useBudget(ref, 1)
   return (
-    <div ref={ref} className={s.online} title={users.length ? `${users.length} on this board now` : undefined}>
+    <span ref={ref} className={s.online} title={users.length ? `${users.length} on this board now` : undefined}>
       {users.length > 0 && (
         <>
           <AvatarStack users={users} budget={budget - 70} />
@@ -211,6 +213,6 @@ function OnlineNow({ users }: { users: PresenceUser[] }) {
           </span>
         </>
       )}
-    </div>
+    </span>
   )
 }

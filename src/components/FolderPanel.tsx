@@ -61,7 +61,10 @@ function useDrag(session: Session, cam: ReturnType<typeof useCamera>) {
       const els = document.elementsFromPoint(x, y) as HTMLElement[]
       const drop = els.map((el) => el.closest<HTMLElement>('[data-drop]')).find(Boolean)
       const own = p.kind === 'item' ? p.item.id : null
+      // ink only lives on the canvas
+      const ink = p.kind === 'item' && p.item.type === 'stroke'
       if (drop) {
+        if (ink) return { target: null, key: null }
         const d = drop.dataset.drop!
         return d === own ? { target: null, key: null } : { target: { folder: d }, key: d }
       }
@@ -69,7 +72,7 @@ function useDrag(session: Session, cam: ReturnType<typeof useCamera>) {
       if (els[0]?.closest('[data-nodrag]')) return { target: null, key: null }
       const itemEl = els.map((el) => el.closest<HTMLElement>('[data-item-id]')).find(Boolean)
       const it = itemEl ? store.getSnapshot().all.get(itemEl.dataset.itemId!) : undefined
-      if (it?.type === 'folder' && it.mode === 'virtual' && it.id !== own) return { target: { folder: it.id }, key: it.id, el: itemEl! }
+      if (it?.type === 'folder' && it.mode === 'virtual' && it.id !== own && !ink) return { target: { folder: it.id }, key: it.id, el: itemEl! }
       if (!els.some((el) => el.closest('[data-canvas]'))) return { target: null, key: null }
       const wp = canvasPoint(x, y, cam)
       return wp ? { target: { canvas: wp }, key: null } : { target: null, key: null }
@@ -378,6 +381,7 @@ interface ChildProps {
 
 function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, onDelete }: ChildProps) {
   const { store, files } = useSession()
+  const dispatch = useUiDispatch()
   const preview = usePreview()
   let body: React.ReactNode = null
   let title = ''
@@ -410,12 +414,13 @@ function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, on
 
   const open = () => {
     if (item.type === 'folder') onOpenFolder()
+    else if (item.type === 'note') dispatch({ type: 'noteModal', id: item.id })
     else if (fileArgs) {
       if (canPrev) preview(fileArgs)
       else void files.download(fileArgs)
     } else if (url) window.open(url, '_blank', 'noopener,noreferrer')
   }
-  const opens = item.type === 'folder' || !!fileArgs || !!url
+  const opens = item.type === 'folder' || item.type === 'note' || !!fileArgs || !!url
 
   return (
     <div
@@ -441,7 +446,7 @@ function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, on
       onContextMenu={(e) => {
         onSelect()
         openMenu(e, [
-          opens && { label: item.type === 'folder' ? 'Open' : canPrev ? 'Preview' : url ? 'Open link' : 'Download', icon: item.type === 'folder' ? 'folder' : canPrev ? 'eye' : url ? 'link' : 'download', hint: 'Enter', onSelect: open },
+          opens && { label: item.type === 'folder' ? 'Open' : item.type === 'note' ? 'Open note' : canPrev ? 'Preview' : url ? 'Open link' : 'Download', icon: item.type === 'folder' ? 'folder' : item.type === 'note' ? 'expand' : canPrev ? 'eye' : url ? 'link' : 'download', hint: 'Enter', onSelect: open },
           canPrev && fileArgs && { label: 'Download', icon: 'download', onSelect: () => void files.download(fileArgs) },
           item.type === 'folder' && {
             label: 'Rename…',

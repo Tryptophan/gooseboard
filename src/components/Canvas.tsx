@@ -374,7 +374,9 @@ export function Canvas() {
         store.updateMany(patches)
         let target: string | null = null
         const all = snapRef.current
-        for (let i = all.canvas.length - 1; i >= 0; i--) {
+        // ink stays on the canvas, so a strokes-only selection has nowhere to drop
+        const inkOnly = it.ids.every((id) => all.all.get(id)?.type === 'stroke')
+        for (let i = inkOnly ? -1 : all.canvas.length - 1; i >= 0; i--) {
           const c = all.canvas[i]
           if (c.type === 'folder' && c.mode === 'virtual' && !it.ids.includes(c.id) && pointInItem(c, wp)) {
             target = c.id
@@ -459,9 +461,13 @@ export function Canvas() {
       case 'move':
         if (it.moved && dropTarget) {
           const folder = snapRef.current.all.get(dropTarget)
-          store.reparent(it.ids, dropTarget)
-          dispatch({ type: 'select', ids: [] })
-          toast(`Moved ${it.ids.length} item${it.ids.length === 1 ? '' : 's'} into “${folder && folder.type === 'folder' ? folder.name : 'folder'}”`)
+          const moved = store.reparent(it.ids, dropTarget)
+          const left = it.ids.filter((id) => !moved.includes(id))
+          dispatch({ type: 'select', ids: left })
+          toast(
+            `Moved ${moved.length} item${moved.length === 1 ? '' : 's'} into “${folder && folder.type === 'folder' ? folder.name : 'folder'}”` +
+              (left.length ? '. Ink stays on the canvas' : ''),
+          )
         }
         setDropTarget(null)
         setMoving(false)
@@ -525,6 +531,7 @@ export function Canvas() {
       const url = only?.type === 'link' ? normalizeUrl(only.url) : null
       const entries: (MenuEntry | false | null | undefined)[] = [
         only?.type === 'note' && { label: 'Edit text', icon: 'note', hint: 'Enter', onSelect: () => dispatch({ type: 'editing', id: only.id }) },
+        only?.type === 'note' && { label: 'Open in window', icon: 'expand', hint: 'Shift+Enter', onSelect: () => dispatch({ type: 'noteModal', id: only.id }) },
         only?.type === 'folder' && { label: 'Open', icon: 'folder', hint: 'Enter', onSelect: () => dispatch({ type: 'folder', id: only.id }) },
         only?.type === 'folder' && {
           label: 'Rename…',
@@ -754,6 +761,7 @@ export function Canvas() {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (uiRef.current.noteModal) return // the note window owns the keyboard
       const typing = isTyping(e.target)
       if (e.key === 'Escape') {
         if (uiRef.current.editing) {
@@ -814,7 +822,7 @@ export function Canvas() {
       }
       if (e.key === 'Enter' && sel.length === 1) {
         const it = snapRef.current.all.get(sel[0])
-        if (it?.type === 'note') dispatch({ type: 'editing', id: it.id })
+        if (it?.type === 'note') dispatch(e.shiftKey ? { type: 'noteModal', id: it.id } : { type: 'editing', id: it.id })
         else if (it?.type === 'folder') dispatch({ type: 'folder', id: it.id })
         e.preventDefault()
         return

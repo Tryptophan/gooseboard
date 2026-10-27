@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { Canvas } from '../components/Canvas'
 import { FolderPanel } from '../components/FolderPanel'
+import { NoteModal } from '../components/Note'
 import { Icon } from '../components/Icons'
 import { Minimap } from '../components/Minimap'
 import { PreviewProvider } from '../components/Preview'
@@ -59,6 +60,7 @@ function Board({ id }: { id: string }) {
         <TopBar boardId={id} />
         <RelinkBanner />
         <FolderPanel />
+        <NoteModal />
         <Toolbar />
         <ZoomControls />
         <TransferPanel />
