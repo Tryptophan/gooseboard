@@ -24,6 +24,31 @@ export interface BlobOpts {
   signal?: AbortSignal
 }
 
+interface Fetched {
+  blob: Blob
+  hash?: string
+}
+
+/** A whole-file fetch that a preview and downloads of the same file share, so the bytes cross the wire once. */
+export interface SharedFetch {
+  result: Promise<Fetched>
+  done: number
+  state: ReqState
+  watchers: Set<() => void>
+}
+
+interface Shared extends SharedFetch {
+  refs: number
+  ctl: AbortController
+}
+
+export interface Lease {
+  fetch: SharedFetch
+  release(): void
+}
+
+const fileKey = (ownerId: string, r: GetReq) => [ownerId, r.kind, r.key, r.path ?? '', r.hash ?? ''].join('\0')
+
 function saveBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -38,6 +63,7 @@ function saveBlob(blob: Blob, name: string) {
 /** User-facing operations on remote files: thumbnails, directory listings, previews, downloads. */
 export class FileService {
   private thumbs = new Map<string, Promise<string | null>>()
+  private shared = new Map<string, Shared>()
 
   constructor(
     private p2p: P2P,
@@ -63,6 +89,10 @@ export class FileService {
   }
 
   async getBlob(ownerId: string, req: GetReq, onState?: (s: ReqState) => void, o: BlobOpts = {}): Promise<Blob> {
+    return (await this.fetch(ownerId, req, onState, o)).blob
+  }
+
+  private async fetch(ownerId: string, req: GetReq, onState?: (s: ReqState) => void, o: BlobOpts = {}): Promise<Fetched> {
     req = this.withHash(req)
     const parts: BlobPart[] = []
     let mime = ''
@@ -86,7 +116,54 @@ export class FileService {
     const hash = await this.verify(req, hasher)
     // anything small we fetched (incl. folder files someone opened) becomes servable by us
     if (hash && blob.size <= SMALL_FILE) await this.mirror.put(hash, { name, mime, board: this.board, alias: req.alias }, { blob })
-    return blob
+    return { blob, hash }
+  }
+
+  /**
+   * Joins (or starts) the whole-file fetch for `req`. Call release() when done with it; the
+   * fetch is canceled once nobody holds it.
+   */
+  acquire(ownerId: string, req: GetReq): Lease {
+    const k = fileKey(ownerId, req)
+    let sh = this.shared.get(k)
+    if (!sh) {
+      const s: Shared = { done: 0, state: 'connecting', refs: 0, ctl: new AbortController(), watchers: new Set(), result: null! }
+      const notify = () => s.watchers.forEach((w) => w())
+      s.result = this.fetch(
+        ownerId,
+        { ...req, op: 'file' },
+        (st) => {
+          s.state = st
+          notify()
+        },
+        {
+          signal: s.ctl.signal,
+          onProgress: (d) => {
+            s.done = d
+            notify()
+          },
+        },
+      )
+      s.result.catch(() => this.shared.get(k) === s && this.shared.delete(k))
+      this.shared.set(k, s)
+      sh = s
+    }
+    const s = sh
+    s.refs++
+    let held = true
+    return {
+      fetch: s,
+      release: () => {
+        if (!held) return
+        held = false
+        // deferred so a StrictMode remount, or a download taking over from a closing preview, reuses the fetch
+        setTimeout(() => {
+          if (--s.refs > 0) return
+          if (this.shared.get(k) === s) this.shared.delete(k)
+          s.ctl.abort()
+        })
+      },
+    }
   }
 
   /** Object URL for a thumbnail the owner generates on demand (cached for the session). */
@@ -133,6 +210,8 @@ export class FileService {
    * Resumes automatically, from another holder if needed, when the source drops.
    */
   async download(a: DownloadArgs): Promise<void> {
+    // a preview of this file is already fetching it: wait for those bytes instead of asking again
+    const lease = this.shared.has(fileKey(a.ownerId, a.req)) ? this.acquire(a.ownerId, a.req) : null
     let writable: any = null
     let handle: any = null
     if (canSavePicker()) {
@@ -141,13 +220,14 @@ export class FileService {
         handle = await (window as any).showSaveFilePicker({ suggestedName: a.name })
         writable = await handle.createWritable()
       } catch (e) {
-        if ((e as Error).name === 'AbortError') return
+        if ((e as Error).name === 'AbortError') return lease?.release()
         writable = null
       }
     }
     const req = this.withHash({ ...a.req, op: 'file' })
     const id = `down:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`
     const isMine = a.ownerId === this.self.id
+    if (lease) return this.downloadShared(a, lease, id, isMine, writable, handle)
     const hasher = new Hasher()
     let mime = ''
     let acc: Blob | null = null
@@ -197,6 +277,39 @@ export class FileService {
       if (writable) await writable.abort?.().catch(() => {})
       const msg = (e as Error).message
       this.transfers.patch(id, msg === 'canceled' ? { state: 'canceled' } : { state: 'error', error: msg })
+    }
+  }
+
+  /** Saves a file whose bytes an open preview is fetching (or has fetched) anyway. */
+  private async downloadShared(a: DownloadArgs, lease: Lease, id: string, isMine: boolean, writable: any, handle: any) {
+    const f = lease.fetch
+    let cancel!: () => void
+    const canceled = new Promise<never>((_, reject) => (cancel = () => reject(new Error('canceled'))))
+    const watch = () => this.transfers.patch(id, { done: f.done, state: f.state })
+    this.transfers.add({
+      id, dir: 'down', name: a.name, size: a.size, done: f.done, state: f.state,
+      peerName: isMine ? 'this device' : a.ownerName, startedAt: Date.now(), cancel,
+    })
+    f.watchers.add(watch)
+    try {
+      const { blob, hash } = await Promise.race([f.result, canceled])
+      const info = { name: a.name, mime: blob.type, board: this.board, alias: a.req.alias }
+      if (writable) {
+        await writable.write(blob)
+        await writable.close()
+        if (hash && !isMine) await this.mirror.put(hash, info, { handle, file: await handle.getFile() }).catch(() => {})
+      } else {
+        saveBlob(blob, a.name)
+        if (hash && !isMine) await this.mirror.put(hash, info, { blob })
+      }
+      this.transfers.patch(id, { state: 'done', done: blob.size })
+    } catch (e) {
+      if (writable) await writable.abort?.().catch(() => {})
+      const msg = (e as Error).message
+      this.transfers.patch(id, msg === 'canceled' ? { state: 'canceled' } : { state: 'error', error: msg })
+    } finally {
+      f.watchers.delete(watch)
+      lease.release()
     }
   }
 }

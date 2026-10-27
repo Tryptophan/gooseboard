@@ -40,16 +40,29 @@ function PreviewModal({ args, onClose }: { args: PreviewArgs; onClose: () => voi
   const [text, setText] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [note, setNote] = useState('Fetching from ' + (args.ownerId === profile.id ? 'disk' : args.ownerName) + '…')
+  const [done, setDone] = useState<number | null>(null)
   const urlRef = useRef<string | null>(null)
   const kind = kindOf(args.name, args.mime)
 
   useEffect(() => {
     let dead = false
-    files
-      .getBlob(args.ownerId, { ...args.req, op: 'file' }, (st) =>
-        setNote(st === 'waiting-owner' ? `Waiting for ${args.ownerName} to come online…` : st === 'waiting-relink' ? `Waiting for ${args.ownerName} to relink the file…` : 'Downloading…'),
-      )
-      .then(async (b) => {
+    // shared with the Download button, so downloading while (or after) previewing fetches once
+    const lease = files.acquire(args.ownerId, args.req)
+    const f = lease.fetch
+    let frame = 0
+    const watch = () => {
+      const st = f.state
+      setNote(st === 'waiting-owner' ? `Waiting for ${args.ownerName} to come online…` : st === 'waiting-relink' ? `Waiting for ${args.ownerName} to relink the file…` : 'Downloading…')
+      // progress arrives per chunk: repaint at most once a frame
+      frame ||= requestAnimationFrame(() => {
+        frame = 0
+        setDone(f.state === 'active' || f.done > 0 ? f.done : null)
+      })
+    }
+    f.watchers.add(watch)
+    watch()
+    f.result
+      .then(async ({ blob: b }) => {
         if (dead) return
         if (kind === 'text' || kind === 'code') setText(await b.text())
         else {
@@ -60,6 +73,9 @@ function PreviewModal({ args, onClose }: { args: PreviewArgs; onClose: () => voi
       .catch((e) => !dead && setErr((e as Error).message))
     return () => {
       dead = true
+      f.watchers.delete(watch)
+      cancelAnimationFrame(frame)
+      lease.release()
       if (urlRef.current) URL.revokeObjectURL(urlRef.current)
     }
   }, [files, args, kind])
@@ -98,11 +114,28 @@ function PreviewModal({ args, onClose }: { args: PreviewArgs; onClose: () => voi
             ) : (
               <iframe src={url} title={args.name} sandbox="" />
             )
+          ) : done !== null ? (
+            <Progress done={done} size={args.size} note={note === 'Downloading…' ? null : note} />
           ) : (
             <p className={s.msg}>{note}</p>
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function Progress({ done, size, note }: { done: number; size: number; note: string | null }) {
+  const pct = size > 0 ? Math.min(100, (done / size) * 100) : 0
+  return (
+    <div className={s.progress}>
+      <div className={s.bar} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
+        <div style={{ width: `${pct}%` }} />
+      </div>
+      <span>
+        {formatSize(done)} of {formatSize(size)} · {Math.floor(pct)}%
+      </span>
+      {note && <span>{note}</span>}
     </div>
   )
 }
