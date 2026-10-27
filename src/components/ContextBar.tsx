@@ -3,6 +3,7 @@ import { FOLDER_COLORS, NOTE_COLORS, PEN_COLORS, type Item } from '../model/type
 import { useCamera } from '../state/camera'
 import { useSession } from '../state/session'
 import { useUiDispatch } from '../state/ui'
+import { ColorPicker } from './ColorPicker'
 import { Icon } from './Icons'
 import s from './Canvas.module.css'
 
@@ -23,6 +24,9 @@ export function ContextBar({ items }: { items: Item[] }) {
     store.updateMany(Object.fromEntries(ids.map((id) => [id, { color: c }])))
   }
 
+  // onStart/onEnd of one drag come from the same render, so they share this
+  let captureTimeout = 0
+
   const left = clamp((b.x + b.w / 2) * cam.z + cam.x, 150, Math.max(150, size.w - 150))
   // clear of the rotate handle (34px above the item)
   let top = b.y * cam.z + cam.y - (only ? 92 : 54)
@@ -35,9 +39,21 @@ export function ContextBar({ items }: { items: Item[] }) {
           {palette.map((c) => (
             <button key={c} className={s.swatch} style={{ background: c }} onClick={() => setColor(c)} aria-label={`Color ${c}`} />
           ))}
-          <label className={`${s.swatch} ${s.rainbow}`} title="More colors…">
-            <input type="color" onChange={(e) => setColor(e.target.value)} />
-          </label>
+          <ColorPicker
+            className={`${s.swatch} ${s.rainbow}`}
+            value={(items[0] as { color?: string }).color}
+            onChange={(c) => store.updateMany(Object.fromEntries(ids.map((id) => [id, { color: c }])))}
+            onStart={() => {
+              // one undo step per drag, however long it pauses
+              store.undo.stopCapturing()
+              captureTimeout = store.undo.captureTimeout
+              store.undo.captureTimeout = Infinity
+            }}
+            onEnd={() => {
+              store.undo.captureTimeout = captureTimeout
+              store.undo.stopCapturing()
+            }}
+          />
           <span className={s.sep} />
         </>
       )}

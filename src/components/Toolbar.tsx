@@ -4,6 +4,7 @@ import { PEN_COLORS } from '../model/types'
 import { useCamera } from '../state/camera'
 import { useSession } from '../state/session'
 import { useUi, useUiDispatch, type Tool } from '../state/ui'
+import { ColorPicker } from './ColorPicker'
 import { Icon } from './Icons'
 import s from './Chrome.module.css'
 
@@ -63,9 +64,7 @@ export function Toolbar() {
           {(ui.tool === 'pen' ? PEN_COLORS : ['#ffd400', '#ff7ab8', '#5ce1e6', '#7be495', '#ff9f43', '#b69cff']).map((c) => (
             <button key={c} className={`${s.swatch} ${brush.color === c ? s.swatchOn : ''}`} style={{ background: c }} onClick={() => setBrush({ color: c })} aria-label={`Color ${c}`} />
           ))}
-          <label className={`${s.swatch} ${s.rainbow}`} title="More colors…">
-            <input type="color" value={brush.color} onChange={(e) => setBrush({ color: e.target.value })} />
-          </label>
+          <ColorPicker className={`${s.swatch} ${s.rainbow}`} value={brush.color} onChange={(c) => setBrush({ color: c })} />
           <input className={s.range} type="range" min={1} max={ui.tool === 'pen' ? 24 : 16} value={brush.size} onChange={(e) => setBrush({ size: Number(e.target.value) })} title="Size" />
           <span className={s.dotPreview} style={{ width: brush.size * (ui.tool === 'pen' ? 1 : 3) + 2, height: brush.size * (ui.tool === 'pen' ? 1 : 3) + 2, background: brush.color, opacity: ui.tool === 'pen' ? 1 : 0.5 }} />
         </div>

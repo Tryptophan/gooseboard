@@ -49,7 +49,6 @@
 .swatch { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border); padding: 0; cursor: pointer; margin: 0 2px; flex: none; }
 .contextBar .swatch { width: 20px; height: 20px; }
 .rainbow { background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red); position: relative; overflow: hidden; }
-.rainbow input { position: absolute; inset: -6px; opacity: 0; cursor: pointer; width: 40px; height: 40px; }
 .sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
 
 .empty {

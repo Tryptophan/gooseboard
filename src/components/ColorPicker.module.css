@@ -1,0 +1,26 @@
+.root { position: relative; display: inline-flex; flex: none; }
+.pop {
+  position: absolute; z-index: 50; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+  width: 200px; padding: 10px; display: grid; gap: 10px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg);
+}
+.below { bottom: auto; top: calc(100% + 10px); }
+.sv {
+  position: relative; height: 130px; border-radius: 8px; cursor: crosshair; touch-action: none;
+  background-image: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent);
+}
+.hue {
+  position: relative; height: 12px; border-radius: 6px; cursor: ew-resize; touch-action: none;
+  background: linear-gradient(to right, red, yellow, lime, aqua, blue, magenta, red);
+}
+.thumb {
+  position: absolute; width: 14px; height: 14px; border-radius: 50%; transform: translate(-50%, -50%);
+  border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.3); pointer-events: none;
+}
+.row { display: flex; align-items: center; gap: 8px; }
+.preview { width: 26px; height: 26px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15); flex: none; }
+.hex {
+  flex: 1; min-width: 0; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 12.5px;
+}
+.hex:focus { outline: none; border-color: var(--accent); }
