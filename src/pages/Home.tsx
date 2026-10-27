@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ROOM_PREFIX } from '../config'
 import { newBoardId, parseBoardRef } from '../lib/ids'
-import { forgetBoard, getBoards, getProfile, renameBoardLocal, saveProfile, touchBoard, USER_COLORS, type BoardEntry } from '../lib/storage'
+import { forgetBoard, getBoards, getProfile, renameBoardPending, saveProfile, touchBoard, USER_COLORS, type BoardEntry } from '../lib/storage'
 import { Icon } from '../components/Icons'
 import { useUi, useUiDispatch } from '../state/ui'
 import s from './Home.module.css'
@@ -114,7 +114,7 @@ export default function Home() {
                   onClick={() => {
                     const n = window.prompt('Board name', b.name)
                     if (n?.trim()) {
-                      renameBoardLocal(b.id, n.trim())
+                      renameBoardPending(b.id, n.trim())
                       setBoards(getBoards())
                     }
                   }}

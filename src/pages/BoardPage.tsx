@@ -11,7 +11,7 @@ import { TopBar } from '../components/TopBar'
 import { RelinkBanner, TransferPanel } from '../components/TransferPanel'
 import { unionBounds } from '../lib/geometry'
 import { isValidBoardId } from '../lib/ids'
-import { loadCamera, saveCamera, touchBoard } from '../lib/storage'
+import { loadCamera, saveCamera, takePendingName, touchBoard } from '../lib/storage'
 import { acquireSession, releaseSession, type Session } from '../net/session'
 import { CameraProvider, useCamera } from '../state/camera'
 import { SessionProvider, useSnapshot } from '../state/session'
@@ -34,7 +34,11 @@ function BoardLoader({ id }: { id: string }) {
     const s = acquireSession(id)
     touchBoard(id)
     setSession(s)
-    s.store.onLoaded(() => setReady(true))
+    s.store.onLoaded(() => {
+      const pending = takePendingName(id)
+      if (pending) s.store.setName(pending)
+      setReady(true)
+    })
     return () => releaseSession(id)
   }, [id, dispatch])
 

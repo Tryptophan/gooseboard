@@ -11,6 +11,8 @@ export interface BoardEntry {
   name: string
   createdAt: number
   lastOpened: number
+  /** Set by a rename from the home screen; written into the board doc on next open. */
+  pendingName?: string
 }
 
 export type ThemePref = 'system' | 'light' | 'dark'
@@ -98,6 +100,28 @@ export function renameBoardLocal(id: string, name: string) {
     e.name = name
     saveBoards(list)
   }
+}
+
+/** Renames from outside the board; the doc picks it up via takePendingName. */
+export function renameBoardPending(id: string, name: string) {
+  const list = getBoards()
+  const e = list.find((b) => b.id === id)
+  if (e) {
+    e.name = name
+    e.pendingName = name
+    saveBoards(list)
+  }
+}
+
+export function takePendingName(id: string): string | undefined {
+  const list = getBoards()
+  const e = list.find((b) => b.id === id)
+  const name = e?.pendingName
+  if (e && name !== undefined) {
+    delete e.pendingName
+    saveBoards(list)
+  }
+  return name
 }
 
 export function forgetBoard(id: string) {
