@@ -61,8 +61,8 @@ function FolderBody({ item, childCount }: { item: FolderItem; childCount: number
   return (
     <div className={s.folder}>
       <svg viewBox="0 0 120 92" preserveAspectRatio="none" className={s.folderSvg} aria-hidden>
-        <path d="M6 14a8 8 0 018-8h26l10 10h52a8 8 0 018 8v54a8 8 0 01-8 8H14a8 8 0 01-8-8z" fill={item.color} />
-        <path d="M6 30h108v46a8 8 0 01-8 8H14a8 8 0 01-8-8z" fill="#fff" opacity="0.22" />
+        <path d="M6 14a8 8 0 018-8h26l10 10h56a8 8 0 018 8v54a8 8 0 01-8 8H14a8 8 0 01-8-8z" fill={item.color} />
+        <path d="M6 30h108v48a8 8 0 01-8 8H14a8 8 0 01-8-8z" fill="#fff" opacity="0.22" />
       </svg>
       <div className={s.folderInfo}>
         <div className={s.cardName} title={item.name}>
