@@ -199,7 +199,7 @@ export class BoardStore {
     this.transact(() => doomed.forEach((id) => this.items.delete(id)))
   }
 
-  /** Moves items into `parent`; ink strokes only live on the board, so they never go into a folder. Returns the ids moved. */
+  /** Moves items into `parent`; drawing strokes only live on the board, so they never go into a folder. Returns the ids moved. */
   reparent(ids: string[], parent: string | null): string[] {
     const patches: Record<string, Record<string, any>> = {}
     for (const id of ids) {

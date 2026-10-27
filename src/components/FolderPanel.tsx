@@ -62,10 +62,10 @@ function useDrag(session: Session, cam: ReturnType<typeof useCamera>) {
       const els = document.elementsFromPoint(x, y) as HTMLElement[]
       const drop = els.map((el) => el.closest<HTMLElement>('[data-drop]')).find(Boolean)
       const own = p.kind === 'item' ? p.item.id : null
-      // ink only lives on the board
-      const ink = p.kind === 'item' && p.item.type === 'stroke'
+      // drawings only live on the board
+      const drawing = p.kind === 'item' && p.item.type === 'stroke'
       if (drop) {
-        if (ink) return { target: null, key: null }
+        if (drawing) return { target: null, key: null }
         const d = drop.dataset.drop!
         return d === own ? { target: null, key: null } : { target: { folder: d }, key: d }
       }
@@ -73,7 +73,7 @@ function useDrag(session: Session, cam: ReturnType<typeof useCamera>) {
       if (els[0]?.closest('[data-nodrag]')) return { target: null, key: null }
       const itemEl = els.map((el) => el.closest<HTMLElement>('[data-item-id]')).find(Boolean)
       const it = itemEl ? store.getSnapshot().all.get(itemEl.dataset.itemId!) : undefined
-      if (it?.type === 'folder' && it.mode === 'virtual' && it.id !== own && !ink) return { target: { folder: it.id }, key: it.id, el: itemEl! }
+      if (it?.type === 'folder' && it.mode === 'virtual' && it.id !== own && !drawing) return { target: { folder: it.id }, key: it.id, el: itemEl! }
       if (!els.some((el) => el.closest('[data-board-surface]'))) return { target: null, key: null }
       const wp = surfacePoint(x, y, cam)
       return wp ? { target: { surface: wp }, key: null } : { target: null, key: null }

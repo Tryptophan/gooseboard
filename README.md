@@ -1,12 +1,12 @@
 # Gooseboard
 
-A simple collaborative decentralized workspace for notes, ink, files and folders, shared live between browsers. No accounts or cloud: open [gooseboard.io](https://gooseboard.io), share the link, and everyone with it edits the same board in real time, peer to peer.
+A simple collaborative decentralized workspace for notes, drawings, files and folders, shared live between browsers. No accounts or cloud: open [gooseboard.io](https://gooseboard.io), share the link, and everyone with it edits the same board in real time, peer to peer.
 
 ## Features
 
 **On the board**
 - **Notes** with rich text and markdown shortcuts (`#` headings, `**bold**`, `-` lists, `[ ]` checklists, code blocks). Edit in place, or open a note in its own window for longer writing.
-- **Freehand ink** with pressure from a stylus, plus an eraser.
+- **Freehand drawing** with pressure from a stylus, plus an eraser.
 - **Files** of any kind: drop, paste or pick them. Images and videos get thumbnails. Images, video, audio, PDFs and text open in a built-in viewer, and big media streams while it loads.
 - **Folders** to group items, with breadcrumbs and drag-in / drag-out. **Disk folders** share a folder from your computer, browsed live by everyone.
 - **Links** as cards or live embeds (YouTube, Vimeo, Spotify, SoundCloud, Google Maps, OpenStreetMap, Google Docs and Drive), switchable per link.

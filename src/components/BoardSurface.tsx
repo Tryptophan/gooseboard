@@ -86,7 +86,7 @@ export function BoardSurface() {
   const pointers = useRef(new Map<number, Vec>())
   /** the pointer driving `inter` (other fingers, a resting palm, are ignored) */
   const active = useRef({ id: -1, type: '' })
-  /** once a stylus shows up, it inks and fingers navigate */
+  /** once a stylus shows up, it draws and fingers navigate */
   const penSeen = useRef(false)
   const pressTimer = useRef(0)
   const lastTap = useRef<{ t: number; x: number; y: number } | null>(null)
@@ -374,7 +374,7 @@ export function BoardSurface() {
     active.current = { id: e.pointerId, type: e.pointerType }
 
     const inkTool = u.tool === 'pen' || u.tool === 'eraser'
-    // with a stylus: the pen inks even under Select/Pan (handles still resize), and fingers navigate under ink tools
+    // with a stylus: the pen draws even under Select/Pan (handles still resize), and fingers navigate under drawing tools
     const penInks = e.pointerType === 'pen' && (u.tool === 'select' || u.tool === 'hand') && !handleEl
     const fingerPans = touch && penSeen.current && inkTool
     const tool = penInks ? 'pen' : u.tool
@@ -526,7 +526,7 @@ export function BoardSurface() {
         store.updateMany(patches)
         let target: string | null = null
         const all = snapRef.current
-        // ink stays on the board, so a strokes-only selection has nowhere to drop
+        // drawings stay on the board, so a strokes-only selection has nowhere to drop
         const inkOnly = it.ids.every((id) => all.all.get(id)?.type === 'stroke')
         for (let i = inkOnly ? -1 : all.surface.length - 1; i >= 0; i--) {
           const c = all.surface[i]
@@ -634,7 +634,7 @@ export function BoardSurface() {
           dispatch({ type: 'select', ids: left })
           toast(
             `Moved ${moved.length} item${moved.length === 1 ? '' : 's'} into “${folder && folder.type === 'folder' ? folder.name : 'folder'}”` +
-              (left.length ? '. Ink stays on the board' : ''),
+              (left.length ? '. Drawings stay on the board' : ''),
           )
         }
         setDropTarget(null)
