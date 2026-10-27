@@ -1,7 +1,7 @@
 .root { position: relative; display: inline-flex; flex: none; }
 .pop {
   position: absolute; z-index: 50; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
-  width: 200px; padding: 10px; display: grid; gap: 10px;
+  width: 200px; padding: 10px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg);
 }
 .below { bottom: auto; top: calc(100% + 10px); }
