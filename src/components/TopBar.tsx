@@ -191,7 +191,7 @@ export function TopBar({ boardId }: { boardId: string }) {
               <li key={p.clientId}>
                 <button className={ui.follow === p.clientId ? s.following : ''} onClick={() => clickPeer(p)} data-me-toggle={p.isSelf || undefined}>
                   <span className={s.avatar} style={{ background: p.color }}><Goose color={p.color} /></span>
-                  {p.name}
+                  <span className={s.peerName}>{p.name}</span>
                   <span className={s.muted}>{p.isSelf ? 'you' : ui.follow === p.clientId ? 'following' : ''}</span>
                 </button>
               </li>

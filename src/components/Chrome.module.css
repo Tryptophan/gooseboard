@@ -19,9 +19,13 @@
 .avatar.more { background: var(--hover); color: var(--text); font-size: 11.5px; font-weight: 650; }
 .avatar.static, .avatar.more[tabindex='-1'] { cursor: default; }
 .peerList { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; max-height: 50vh; overflow: auto; }
+.popover .peerList li { font-family: inherit; font-size: 13px; }
 .peerList button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 6px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; text-align: left; color: var(--text); }
 .peerList button:hover { background: var(--hover); }
-.peerList .avatar { width: 24px; height: 24px; margin: 0; font-size: 11px; cursor: inherit; }
+.peerList .avatar { width: 24px; height: 24px; margin: 0; font-size: 11px; cursor: inherit; flex: none; }
+/* a long name truncates; the avatar and "you" stay whole */
+.peerName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.peerList .muted { flex: none; }
 .rest { display: flex; align-items: center; gap: 8px; }
 .iconBtn { width: 34px; height: 34px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 9px; cursor: pointer; }
 .iconBtn:hover { background: var(--hover); }
