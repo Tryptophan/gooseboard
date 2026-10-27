@@ -51,6 +51,20 @@ function useBoardPresence(boards: BoardEntry[], onRenamed: () => void) {
 export default function Home() {
   const nav = useNavigate()
   const theme = useThemeToggle()
+
+  // the logo matches the title block's height (on phones, just the title's: the tagline wraps below)
+  const headText = useRef<HTMLDivElement>(null)
+  const [logo, setLogo] = useState(44)
+  useEffect(() => {
+    const el = headText.current
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      const h1 = el.querySelector('h1')!
+      setLogo(Math.round(matchMedia('(max-width: 560px)').matches ? h1.offsetHeight : el.offsetHeight))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const [boards, setBoards] = useState<BoardEntry[]>(getBoards)
   const [join, setJoin] = useState('')
   const [joinErr, setJoinErr] = useState(false)
@@ -97,8 +111,8 @@ export default function Home() {
   return (
     <main className={s.page}>
       <header className={s.head}>
-        <img src={`${import.meta.env.BASE_URL}favicon.svg`} width={44} height={44} alt="" />
-        <div>
+        <img src={`${import.meta.env.BASE_URL}favicon.svg`} width={logo} height={logo} alt="" />
+        <div ref={headText}>
           <h1>Gooseboard</h1>
           <p>A simple collaborative decentralized workspace. Notes, ink, files and folders, shared live between browsers. No accounts or cloud.</p>
         </div>

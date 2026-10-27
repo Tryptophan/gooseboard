@@ -1,5 +1,6 @@
 .page { max-width: 760px; margin: 0 auto; padding: 40px 20px 60px; height: 100%; overflow: auto; }
 .head { display: flex; gap: 16px; align-items: center; margin-bottom: 28px; }
+.head > img { flex: none; }
 .head h1 { margin: 0; font-size: 30px; letter-spacing: -0.02em; }
 .head p { margin: 2px 0 0; color: var(--muted); }
 .head > div { flex: 1; }
@@ -44,6 +45,10 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 /* phones: the board's name and presence get the whole first line, its actions wrap below on the right */
 @media (max-width: 560px) {
   .page { padding: 24px 16px 48px; }
+  /* logo, title and theme on one line; the tagline gets the full width below */
+  .head { display: grid; grid-template-columns: auto 1fr auto; column-gap: 12px; row-gap: 8px; }
+  .head > div { display: contents; }
+  .head p { grid-column: 1 / -1; grid-row: 2; margin: 0; }
   .list li { flex-wrap: wrap; justify-content: flex-end; }
   .list .open { flex-basis: 100%; }
   .online { flex-basis: 50%; }
