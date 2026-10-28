@@ -5,6 +5,7 @@ import { AUTO_SYNC_CHOICES, getAutoSyncMax, setAutoSyncMax, subscribeAutoSync } 
 import { voice } from '../ai/voice'
 import { formatSize } from '../lib/files'
 import type { ThemePref } from '../lib/storage'
+import { useCoarse } from '../lib/touch'
 import { getGoosey, openMenu, subscribeGoosey, type Tab } from '../state/goosey'
 import { useSession } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
@@ -286,21 +287,34 @@ const KEYS: [string, string][] = [
   ['Esc', 'Stop editing, back to select'],
 ]
 
+/** what phones and tablets get instead of the keyboard list */
+const TOUCH: [string, string][] = [
+  ['Drag', 'Pan the board, or move what’s under your finger'],
+  ['Pinch', 'Zoom'],
+  ['Two fingers', 'Pan'],
+  ['Double-tap', 'New note, or open what’s under your finger'],
+  ['Tap again', 'Edit the selected note'],
+  ['Hold', 'More options'],
+  ['Hold, then drag', 'Select an area'],
+  ['Select more', 'In the bar above a selection: tap items to add them'],
+  ['Stylus', 'Draws even under Select; fingers then pan instead'],
+]
+
 function Help() {
+  const coarse = useCoarse()
   return (
     <>
       <p>A simple collaborative decentralized workspace for notes, drawings, files and folders, shared live between browsers. Share the link, and everyone edits together. Files stay on their owner’s device and stream on demand.</p>
       <b className={s.sub}>Getting started</b>
       <ul className={s.tips}>
-        <li>Drop or paste files, folders, images and links anywhere.</li>
+        <li>{coarse ? 'Add files, folders and links from the toolbar.' : 'Drop or paste files, folders, images and links anywhere.'}</li>
         <li>Press the mic in the toolbar and talk: what you say is written into a note, live for everyone. Speech is recognised on your device.</li>
-        <li>Right-click (long-press on touch) anything for more options.</li>
-        <li>Click someone’s goose in the top right to follow their view.</li>
-        <li>On touch: pinch to zoom, two fingers to pan.</li>
+        <li>{coarse ? 'Hold' : 'Right-click'} anything for more options.</li>
+        <li>{coarse ? 'Tap' : 'Click'} someone’s goose in the top right to follow their view.</li>
       </ul>
-      <b className={s.sub}>Keyboard</b>
+      <b className={s.sub}>{coarse ? 'Touch' : 'Keyboard'}</b>
       <dl className={s.keys}>
-        {KEYS.map(([k, v]) => (
+        {(coarse ? TOUCH : KEYS).map(([k, v]) => (
           <div key={k}>
             <dt>
               <kbd>{k}</kbd>
