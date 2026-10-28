@@ -398,7 +398,7 @@ function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, on
   if (item.type === 'note') {
     const f = store.noteFragment(item.id)
     body = <div className={s.noteText} style={{ background: item.color }}>{(f ? fragmentToText(f) : '').slice(0, 160) || 'Empty note'}</div>
-    title = 'Note'
+    title = item.title || 'Note'
   } else if (item.type === 'file') {
     const t = safeThumb(item.thumb)
     body = <div className={s.thumb}>{t ? <img src={t} alt="" draggable={false} /> : <TypeIcon name={item.name} mime={item.mime} size={44} />}</div>
@@ -453,6 +453,15 @@ function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, on
         openMenu(e, [
           opens && { label: item.type === 'folder' ? 'Open' : item.type === 'note' ? 'Open note' : canPrev ? 'Preview' : url ? 'Open link' : 'Download', icon: item.type === 'folder' ? 'folder' : item.type === 'note' ? 'expand' : canPrev ? 'eye' : url ? 'link' : 'download', hint: 'Enter', onSelect: open },
           canPrev && fileArgs && { label: 'Download', icon: 'download', onSelect: () => void files.download(fileArgs) },
+          item.type === 'note' && 'sep',
+          item.type === 'note' && {
+            swatches: NOTE_COLORS,
+            value: item.color,
+            onPick: (color) => {
+              store.undo.stopCapturing()
+              store.update(item.id, { color })
+            },
+          },
           item.type === 'folder' && {
             label: 'Rename…',
             onSelect: async () => {
@@ -484,7 +493,20 @@ function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, on
         {url && (
           <a title="Open" href={url} target="_blank" rel="noopener noreferrer"><Icon name="link" size={14} /></a>
         )}
-        <button title="Move onto the board" onClick={onOut}><Icon name="up" size={14} /></button>
+        {item.type === 'note' && (
+          <button
+            title="Colour"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect()
+              openMenu({ clientX: r.left, clientY: r.bottom + 4, preventDefault() {}, stopPropagation() {} }, [
+                { swatches: NOTE_COLORS, value: item.color, onPick: (color) => (store.undo.stopCapturing(), store.update(item.id, { color })) },
+              ])
+            }}
+          >
+            <span className={s.colorDot} style={{ background: item.color }} />
+          </button>
+        )}
+                <button title="Move onto the board" onClick={onOut}><Icon name="up" size={14} /></button>
         <button title="Delete" onClick={onDelete}><Icon name="trash" size={14} /></button>
       </div>
     </div>

@@ -18,7 +18,13 @@ export interface ItemBase {
 export interface NoteItem extends ItemBase {
   type: 'note'
   color: string
+  title?: string
+  fontSize?: NoteFontSize
 }
+
+export type NoteFontSize = 's' | 'm' | 'l' | 'xl'
+/** body text size in px on the board; the note window scales them up a little */
+export const NOTE_FONT_SIZES: Record<NoteFontSize, number> = { s: 12, m: 15, l: 19, xl: 25 }
 
 export interface StrokeItem extends ItemBase {
   type: 'stroke'
@@ -45,6 +51,9 @@ export interface FileItem extends ItemBase {
   thumb?: string
   /** content hash (lib/hash), filled in by the owner after adding; lets any holder serve it */
   hash?: string
+  /** natural pixel size of an image or video; with it, the item shows bare (no card) at this aspect */
+  iw?: number
+  ih?: number
 }
 
 export interface FolderItem extends ItemBase {

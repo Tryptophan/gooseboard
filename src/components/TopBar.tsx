@@ -10,6 +10,26 @@ import { fitAvatars, Goose, MoreChip, useBudget } from './Avatars'
 import { Icon } from './Icons'
 import s from './Chrome.module.css'
 
+/** Closes a popover on a press anywhere outside it (and outside its toggle), or on Escape. */
+function useDismiss(open: boolean, close: () => void, ref: React.RefObject<HTMLElement | null>, toggle: string) {
+  const closeRef = useRef(close)
+  closeRef.current = close
+  useEffect(() => {
+    if (!open) return
+    const down = (e: PointerEvent) => {
+      const t = e.target as Element
+      if (!ref.current?.contains(t) && !t.closest?.(toggle)) closeRef.current()
+    }
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && closeRef.current()
+    window.addEventListener('pointerdown', down, true)
+    window.addEventListener('keydown', key)
+    return () => {
+      window.removeEventListener('pointerdown', down, true)
+      window.removeEventListener('keydown', key)
+    }
+  }, [open, ref, toggle])
+}
+
 function useConnection() {
   const { p2p } = useSession()
   const [st, setSt] = useState({ servers: [] as { url: string; kind: string; connected: boolean }[], links: 0 })
@@ -59,6 +79,8 @@ export function TopBar({ boardId }: { boardId: string }) {
   const [showConn, setShowConn] = useState(false)
   const [showMe, setShowMe] = useState(false)
   const [showMore, setShowMore] = useState(false)
+  const connRef = useRef<HTMLDivElement>(null)
+  const moreRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef(document.body)
   const leftRef = useRef<HTMLDivElement>(null)
   const restRef = useRef<HTMLDivElement>(null)
@@ -78,16 +100,10 @@ export function TopBar({ boardId }: { boardId: string }) {
     session.presence.refresh()
   }
 
-  useEffect(() => {
-    if (!showMe) return
-    // the self avatar toggles the popover on its own click, so pressing it isn't "outside"
-    const h = (e: PointerEvent) => {
-      const t = e.target as Element
-      if (!meRef.current?.contains(t) && !t.closest?.('[data-me-toggle]')) setShowMe(false)
-    }
-    window.addEventListener('pointerdown', h, true)
-    return () => window.removeEventListener('pointerdown', h, true)
-  }, [showMe])
+  // each button toggles its popover on its own click, so pressing it isn't "outside"
+  useDismiss(showMe, () => setShowMe(false), meRef, '[data-me-toggle]')
+  useDismiss(showConn, () => setShowConn(false), connRef, '[data-conn-toggle]')
+  useDismiss(showMore, () => setShowMore(false), moreRef, '[data-more-toggle]')
 
   const up = conn.servers.filter((x) => x.connected).length
   const others = peers.filter((p) => !p.isSelf).length
@@ -131,14 +147,14 @@ export function TopBar({ boardId }: { boardId: string }) {
           }}
           size={Math.max(12, (draft ?? name).length + 1)}
         />
-        <button className={s.status} onClick={() => setShowConn(!showConn)} title="Connection status">
+        <button className={s.status} onClick={() => setShowConn(!showConn)} title="Connection status" data-conn-toggle>
           <span className={`${s.led} ${up > 0 ? s.ledOk : s.ledBad}`} />
           <span className={s.label}>{up > 0 ? (others ? `${others + 1} people` : 'Just you') : 'Offline'}</span>
         </button>
       </div>
 
       {showConn && (
-        <div className={`${s.popover} ${s.connPop}`} data-nodrag>
+        <div className={`${s.popover} ${s.connPop}`} data-nodrag ref={connRef}>
           <b>Connection</b>
           <p>
             Board data goes <u>directly between browsers</u> (WebRTC mesh). Public Nostr relays and WebTorrent trackers only introduce peers, and only ever see encrypted handshakes.
@@ -184,7 +200,7 @@ export function TopBar({ boardId }: { boardId: string }) {
       </div>
 
       {showMore && shown < peers.length && (
-        <div className={`${s.popover} ${s.mePop}`} data-nodrag>
+        <div className={`${s.popover} ${s.mePop}`} data-nodrag ref={moreRef}>
           <b>Everyone here</b>
           <ul className={s.peerList}>
             {peers.map((p) => (

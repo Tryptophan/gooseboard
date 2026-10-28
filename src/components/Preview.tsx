@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { embedFor } from '../lib/embed'
 import { formatSize, kindOf } from '../lib/files'
 import type { GetReq, ReqState } from '../net/p2p'
+import { loadVolume, saveVolume } from '../lib/media'
 import { canStream } from '../net/streamSW'
 import { useSession } from '../state/session'
 import { EmbedFrame } from './EmbedFrame'
@@ -114,6 +115,8 @@ function PreviewModal({ args, onClose }: { args: PreviewArgs; onClose: () => voi
   useEffect(() => {
     if (!streamed) return
     const st = files.stream(args.ownerId, args.req, args.size, args.mime, {
+      name: args.name,
+      peerName: args.ownerName,
       onState: (x) => setStall(waitNote(x, args.ownerName)),
       onError: (m) => (rangeErr.current = m),
     })
@@ -198,7 +201,11 @@ function PreviewModal({ args, onClose }: { args: PreviewArgs; onClose: () => voi
               <img src={url} alt={args.name} />
             ) : isMedia(kind) ? (
               <div className={s.media}>
-                {kind === 'video' ? <video src={url} controls autoPlay onError={onMediaError} /> : <audio src={url} controls autoPlay onError={onMediaError} />}
+                {kind === 'video' ? (
+                  <video src={url} controls onError={onMediaError} onLoadedMetadata={(e) => loadVolume(e.currentTarget)} onVolumeChange={(e) => saveVolume(e.currentTarget)} />
+                ) : (
+                  <audio src={url} controls autoPlay onError={onMediaError} onLoadedMetadata={(e) => loadVolume(e.currentTarget)} onVolumeChange={(e) => saveVolume(e.currentTarget)} />
+                )}
                 {stall && <span className={s.stall}>{stall}</span>}
               </div>
             ) : kind === 'pdf' ? (

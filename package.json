@@ -12,7 +12,9 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.2",
     "@noble/curves": "^2.0.1",
+    "@ricky0123/vad-web": "^0.0.30",
     "@tiptap/core": "^2.27.3",
     "@tiptap/extension-collaboration": "^2.27.3",
     "@tiptap/extension-link": "^2.27.3",

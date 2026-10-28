@@ -5,7 +5,7 @@ import type { Profile } from '../lib/storage'
 import type { Mirror } from './mirror'
 import { dropIfStuck, fixGlare } from './signal/glare'
 import type { LocalSources } from './sources'
-import { makeThumb } from './thumbs'
+import { makePreview, makeThumb } from './thumbs'
 import type { TransferStore } from './transfers'
 
 /**
@@ -25,7 +25,8 @@ const BLOCK = 256 * 1024
 const enc = new TextEncoder()
 const dec = new TextDecoder()
 
-export type Op = 'file' | 'thumb' | 'list'
+/** preview: a PREVIEW_DIM rendition of an image (older peers answer with the whole file) */
+export type Op = 'file' | 'thumb' | 'preview' | 'list'
 
 export interface GetReq {
   op: Op
@@ -40,8 +41,10 @@ export interface GetReq {
   hash?: string
   /** requester-side only: folder-file alias (see folderAlias) to record a fetched copy under */
   alias?: string
-  /** background sync: not shown in the server's transfer list */
+  /** a background fetch (syncing, streaming) rather than one the person asked for */
   bg?: boolean
+  /** a range of a media stream: the server lists all of one peer's ranges of a file as one transfer */
+  stream?: boolean
 }
 
 export interface Meta {
@@ -152,6 +155,9 @@ export class P2P {
   private waiting: { link: Link; id: number; req: GetReq }[] = []
   private pending = new Map<string, PendingRelink>()
   private thumbCache = new Map<string, Blob | null>()
+  private previewCache = new Map<string, Promise<Blob | null>>()
+  /** stream transfer id -> ranges of it being served right now */
+  private streamsOut = new Map<string, number>()
   private nextId = (Math.random() * 2 ** 30) | 0
   private timer: ReturnType<typeof setInterval>
   private version = 0
@@ -474,7 +480,7 @@ export class P2P {
       settled: false,
       bad: new Set(),
       skip: new Set(),
-      local: ownerId === this.self.id || (req.op === 'file' && !!req.hash && this.mirror.has(req.hash, this.board)),
+      local: ownerId === this.self.id || ((req.op === 'file' || req.op === 'preview') && !!req.hash && this.mirror.has(req.hash, this.board)),
       startedAt: Date.now(),
       patienceMs: opts.patienceMs ?? (req.op === 'file' ? Infinity : 15000),
       resolve,
@@ -549,9 +555,10 @@ export class P2P {
   // ---- serving (this peer owns the bytes) ----
   private async resolve(req: GetReq): Promise<Resolved | 'relink' | null> {
     const miss = () => (this.lookup(req.key) ? ('relink' as const) : null)
-    if (req.op === 'file' && req.hash) {
+    if ((req.op === 'file' || req.op === 'preview') && req.hash) {
       const b = await this.mirror.get(req.hash, this.board)
       const e = this.mirror.entry(req.hash)
+      if (b && e && req.op === 'preview') return this.resolvePreview(req.hash, b, e.name)
       if (b && e) return { name: e.name, size: b.size, mime: e.mime, mirror: true, read: (a, c) => b.slice(a, c).arrayBuffer() }
     }
     if (req.kind === 'file') {
@@ -587,7 +594,20 @@ export class P2P {
       const blob = t
       return { name: 'thumb.jpg', size: blob.size, mime: 'image/jpeg', read: (a, b) => blob.slice(a, b).arrayBuffer() }
     }
+    if (req.op === 'preview') return this.resolvePreview(`${req.key}\0${req.path ?? ''}`, f, f.name)
     return { name: f.name, size: f.size, mime: mimeOf(f.name, f.type), read: (a, b) => f.slice(a, b).arrayBuffer() }
+  }
+
+  private async resolvePreview(ck: string, src: Blob, name: string): Promise<Resolved | null> {
+    let p = this.previewCache.get(ck)
+    if (!p) {
+      p = makePreview(src, name)
+      this.previewCache.set(ck, p)
+      if (this.previewCache.size > 60) this.previewCache.delete(this.previewCache.keys().next().value!)
+    }
+    const blob = await p
+    if (!blob) return null
+    return { name: 'preview', size: blob.size, mime: blob.type, read: (a, b) => blob.slice(a, b).arrayBuffer() }
   }
 
   /** Reads `r` (up to `to`) in big blocks and hands out frame-sized pieces. Returns false if cancelled. */
@@ -619,6 +639,7 @@ export class P2P {
     this.serving.set(skey, st)
     const tid = `up:${skey}`
     let tracked = false
+    let streamTid = ''
     let sent = req.from ?? 0
     let fromMirror = false
     const send = (m: Wire) => this.sendFrame(link, encodeJSON(m))
@@ -628,7 +649,17 @@ export class P2P {
       if (!r) return void (await send({ t: 'err', id, code: 'notfound' }))
       fromMirror = !!r.mirror
       await send({ t: 'meta', id, meta: { name: r.name, size: r.size, mime: r.mime } })
-      if (req.op === 'file' && !req.bg) {
+      if (req.op === 'file' && req.stream) {
+        // ranges of one stream, reported together: active while any is being sent
+        streamTid = `up:stream:${link.peerId}:${req.key}`
+        const n = (this.streamsOut.get(streamTid) ?? 0) + 1
+        this.streamsOut.set(streamTid, n)
+        if (n === 1) {
+          const prev = this.transfers.getSnapshot().find((t) => t.id === streamTid)
+          if (prev) this.transfers.patch(streamTid, { state: 'active' })
+          else this.transfers.add({ id: streamTid, dir: 'up', name: r.name, size: r.size, done: 0, state: 'active', peerName: link.name ?? 'a peer', startedAt: Date.now() })
+        }
+      } else if (req.op === 'file') {
         tracked = true
         this.transfers.add({
           id: tid, dir: 'up', name: r.name, size: r.size, done: sent, state: 'active',
@@ -641,6 +672,10 @@ export class P2P {
         req.to,
         async (off, bytes) => {
           await this.sendFrame(link, encodeData(id, off, bytes))
+          if (streamTid) {
+            const t = this.transfers.getSnapshot().find((x) => x.id === streamTid)
+            if (t) this.transfers.patch(streamTid, { done: Math.min(t.size, t.done + bytes.length) })
+          }
           sent = off + bytes.length
           if (tracked) this.transfers.patch(tid, { done: sent })
         },
@@ -663,6 +698,14 @@ export class P2P {
       }
     } finally {
       this.serving.delete(skey)
+      if (streamTid) {
+        const n = (this.streamsOut.get(streamTid) ?? 1) - 1
+        if (n > 0) this.streamsOut.set(streamTid, n)
+        else {
+          this.streamsOut.delete(streamTid)
+          this.transfers.patch(streamTid, { state: 'done' })
+        }
+      }
     }
   }
 
@@ -694,5 +737,6 @@ export class P2P {
   /** Mark a key's thumbnails stale (e.g. after relinking a different file). */
   dropThumbs(key: string) {
     for (const k of [...this.thumbCache.keys()]) if (k.startsWith(key + '\0')) this.thumbCache.delete(k)
+    for (const k of [...this.previewCache.keys()]) if (k.startsWith(key + '\0')) this.previewCache.delete(k)
   }
 }

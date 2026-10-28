@@ -6,6 +6,8 @@ import s from './ContextMenu.module.css'
 /** Right-click menus. Call openMenu from an onContextMenu handler; one <MenuHost /> renders it. */
 export type MenuEntry =
   | { label: string; icon?: string; hint?: string; danger?: boolean; disabled?: boolean; onSelect: () => void }
+  /** a row of colour dots */
+  | { swatches: string[]; value?: string; onPick: (color: string) => void }
   | 'sep'
 
 interface Open {
@@ -80,9 +82,9 @@ function Menu({ open }: { open: Open }) {
     }
   }, [])
 
-  const items = open.entries.map((x, i) => ({ x, i })).filter((o) => o.x !== 'sep' && !o.x.disabled).map((o) => o.i)
+  const items = open.entries.map((x, i) => ({ x, i })).filter((o) => o.x !== 'sep' && 'label' in o.x && !o.x.disabled).map((o) => o.i)
   const pick = (x: MenuEntry) => {
-    if (x === 'sep' || x.disabled) return
+    if (x === 'sep' || !('label' in x) || x.disabled) return
     closeMenu()
     x.onSelect()
   }
@@ -114,6 +116,21 @@ function Menu({ open }: { open: Open }) {
       {open.entries.map((x, i) =>
         x === 'sep' ? (
           <div key={i} className={s.sep} />
+        ) : 'swatches' in x ? (
+          <div key={i} className={s.swatches} role="group" aria-label="Colour">
+            {x.swatches.map((c) => (
+              <button
+                key={c}
+                className={c === x.value ? s.swatchOn : ''}
+                style={{ background: c }}
+                aria-label={`Colour ${c}`}
+                onClick={() => {
+                  closeMenu()
+                  x.onPick(c)
+                }}
+              />
+            ))}
+          </div>
         ) : (
           <button
             key={i}

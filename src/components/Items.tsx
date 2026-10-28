@@ -1,4 +1,5 @@
 import { memo, useMemo, useState, type CSSProperties } from 'react'
+import { isImage, isVideo } from '../lib/media'
 import { strokePath } from '../lib/stroke'
 import { embedFor, linkBox } from '../lib/embed'
 import { normalizeUrl } from '../lib/url'
@@ -8,6 +9,7 @@ import { useSession, usePeers, useSourcesVersion } from '../state/session'
 import { EmbedFrame } from './EmbedFrame'
 import { FileBody } from './FileCard'
 import { Icon } from './Icons'
+import { ImageBody, VideoBody } from './Media'
 import { NoteBody } from './Note'
 import { useEmbedPreview } from './Preview'
 import s from './Items.module.css'
@@ -35,7 +37,7 @@ export const ItemView = memo(function ItemView({ item, selected, dropTarget, edi
     >
       {item.type === 'note' && <NoteBody item={item} editing={editing} />}
       {item.type === 'stroke' && <StrokeBody item={item} />}
-      {item.type === 'file' && <FileBody item={item} />}
+      {isImage(item) ? <ImageBody item={item} selected={selected} /> : isVideo(item) ? <VideoBody item={item} selected={selected} /> : item.type === 'file' && <FileBody item={item} />}
       {item.type === 'folder' && <FolderBody item={item} childCount={childCount} />}
       {item.type === 'link' && <LinkBody item={item} editing={editing} selected={selected} />}
     </div>

@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect } from 'react'
 import { formatSize } from '../lib/files'
 import { relink } from '../model/actions'
 import type { Transfer } from '../net/transfers'
 import { usePendingRelinks, useSession, useTransfers } from '../state/session'
 import { Icon } from './Icons'
 import s from './Chrome.module.css'
-import d from './Dialog.module.css'
 
 const LABEL: Record<string, string> = {
   connecting: 'Connecting…',
@@ -17,138 +16,47 @@ const LABEL: Record<string, string> = {
   canceled: 'Canceled',
 }
 
-const SHORT: Record<string, string> = {
-  connecting: 'Connecting…',
-  'waiting-owner': 'Waiting…',
-  'waiting-relink': 'Waiting…',
-}
-
-/** How long the "all done" summary stays up before collapsing to the button. */
-const LINGER_MS = 4000
-
 const isFinished = (t: Transfer) => t.state === 'done' || t.state === 'error' || t.state === 'canceled'
 
-/**
- * One-row summary above the zoom controls while anything is moving; collapses to a small
- * button once idle. Either opens the full list of current and past transfers.
- */
-export function TransferPanel() {
-  const list = useTransfers()
-  const [modal, setModal] = useState(false)
-  const [lingering, setLingering] = useState(false)
-  const live = list.filter((t) => !isFinished(t))
-  const busy = live.length > 0
-
-  // Show the finished summary for a moment after the last transfer ends.
-  // Failures are counted only for the batch that just ended, not the whole history.
-  const wasBusy = useRef(false)
-  const batchStart = useRef(0)
-  const liveRef = useRef(live)
-  liveRef.current = live
-  useEffect(() => {
-    if (busy) {
-      wasBusy.current = true
-      batchStart.current = Math.min(...liveRef.current.map((t) => t.startedAt))
-      setLingering(false)
-      return
-    }
-    if (!wasBusy.current) return
-    wasBusy.current = false
-    setLingering(true)
-    const t = setTimeout(() => setLingering(false), LINGER_MS)
-    return () => clearTimeout(t)
-  }, [busy])
-
-  if (!list.length && !modal) return null
-
-  let row = null
-  if (busy) {
-    const size = live.reduce((n, t) => n + t.size, 0)
-    const done = live.reduce((n, t) => n + Math.min(t.done, t.size), 0)
-    const pct = size ? Math.min(100, (done / size) * 100) : 0
-    const first = live[live.length - 1]
-    const dirs = new Set(live.map((t) => t.dir))
-    const label = live.length === 1 ? first.name : `${first.name} +${live.length - 1} more`
-    const status = live.length === 1 ? (SHORT[first.state] ?? `${Math.round(pct)}%`) : `${Math.round(pct)}%`
-    row = (
-      <div className={s.tNotice} data-nodrag>
-        <button className={`${s.tNoticeMain} ${s.tNoticeTop}`} title="Show all transfers" onClick={() => setModal(true)}>
-          <Icon name={dirs.size > 1 ? 'transfers' : first.dir === 'down' ? 'download' : 'up'} size={14} />
-          <span className={s.tName}>{label}</span>
-          <span className={s.tPct}>{status}</span>
-          <Icon name="expand" size={13} />
-        </button>
-        <div className={s.bar}>
-          <i style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-    )
-  } else if (lingering) {
-    const failed = list.filter((t) => t.state === 'error' && t.startedAt >= batchStart.current).length
-    row = (
-      <div className={s.tNotice} data-nodrag>
-        <div className={s.tNoticeTop}>
-          <button className={s.tNoticeMain} title="Show all transfers" onClick={() => setModal(true)}>
-            <Icon name={failed ? 'close' : 'check'} size={14} />
-            <span className={s.tName}>{failed ? `${failed} transfer${failed > 1 ? 's' : ''} failed` : 'Transfers complete'}</span>
-            <Icon name="expand" size={13} />
-          </button>
-          <button className={s.tIconBtn} title="Hide" onClick={() => setLingering(false)}>
-            <Icon name="close" size={13} />
-          </button>
-        </div>
-      </div>
-    )
-  } else if (list.length) {
-    row = (
-      <button className={s.tButton} data-nodrag title={`Transfers (${list.length})`} onClick={() => setModal(true)}>
-        <Icon name="transfers" size={16} />
-      </button>
-    )
-  }
-
-  return (
-    <>
-      {row}
-      {modal && <TransferModal list={list} onClose={() => setModal(false)} />}
-    </>
-  )
+/** What's moving right now, for the badge on Goosey: count and overall 0..1 progress. */
+export function useTransferProgress() {
+  const live = useTransfers().filter((t) => !isFinished(t))
+  const size = live.reduce((n, t) => n + t.size, 0)
+  const done = live.reduce((n, t) => n + Math.min(t.done, t.size), 0)
+  return { count: live.length, pct: size ? Math.min(1, done / size) : 0 }
 }
 
-function TransferModal({ list, onClose }: { list: Transfer[]; onClose: () => void }) {
+/** While files are moving, closing or reloading the tab asks first (it would cut them off). */
+export function useLeaveGuard() {
+  const { count } = useTransferProgress()
+  useEffect(() => {
+    if (!count) return
+    const h = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', h)
+    return () => window.removeEventListener('beforeunload', h)
+  }, [count])
+}
+
+/** Goosey's Transfers tab: current and past transfers, newest first. */
+export function TransfersTab() {
   const { transfers } = useSession()
-  const closeRef = useRef<HTMLButtonElement>(null)
-  useEffect(() => closeRef.current?.focus(), [])
+  const list = useTransfers()
   const newest = [...list].reverse()
-  const anyFinished = list.some(isFinished)
   return (
-    <div
-      className={d.backdrop}
-      data-nodrag
-      onPointerDown={(e) => e.target === e.currentTarget && onClose()}
-      // keep board shortcuts from firing underneath
-      onKeyDown={(e) => {
-        e.stopPropagation()
-        if (e.key === 'Escape') onClose()
-      }}
-    >
-      <div className={`${d.box} ${s.tModal}`} role="dialog" aria-modal="true" aria-labelledby="transfers-title">
-        <div className={s.transfersHead}>
-          <b id="transfers-title">Transfers</b>
-          <span>
-            <button disabled={!anyFinished} onClick={() => transfers.clearFinished()}>
-              Clear finished
-            </button>
-            <button ref={closeRef} title="Close" onClick={onClose}>
-              <Icon name="close" size={14} />
-            </button>
-          </span>
-        </div>
-        <div className={s.tList}>
-          {newest.length ? newest.map((t) => <TransferRow key={t.id} t={t} />) : <p>No transfers yet.</p>}
-        </div>
+    <>
+      <div className={s.transfersHead}>
+        <span className={s.tSummary}>{list.length ? `${list.filter((t) => !isFinished(t)).length} moving · ${list.length} in all` : ''}</span>
+        <span>
+          <button disabled={!list.some(isFinished)} onClick={() => transfers.clearFinished()}>
+            Clear finished
+          </button>
+        </span>
       </div>
-    </div>
+      <div className={s.tList}>{newest.length ? newest.map((t) => <TransferRow key={t.id} t={t} />) : <p>No transfers yet. Files people open or download from each other show up here.</p>}</div>
+    </>
   )
 }
 

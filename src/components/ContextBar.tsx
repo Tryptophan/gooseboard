@@ -56,7 +56,7 @@ export function ContextBar({ items }: { items: Item[] }) {
 
   return (
     <div ref={ref} className={s.contextBar} style={{ left, top, transform: flip ? 'translateX(-50%)' : 'translate(-50%, -100%)' }} data-nodrag>
-      {textEditor && <NoteToolbar editor={textEditor} variant="bare" />}
+      {textEditor && only?.type === 'note' && <NoteToolbar editor={textEditor} item={only} variant="bare" />}
       <div className={s.contextRow}>
         {palette && (
           <>
@@ -112,9 +112,6 @@ export function ContextBar({ items }: { items: Item[] }) {
         </button>
         <button title="Send to back  [" onClick={() => store.sendToBack(ids)}>
           <Icon name="back" size={17} />
-        </button>
-        <button title="Duplicate  Ctrl+D" onClick={() => dispatch({ type: 'select', ids: store.duplicate(ids) })}>
-          <Icon name="copy" size={17} />
         </button>
         <button
           title="Delete  Del"

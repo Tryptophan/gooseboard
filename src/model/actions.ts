@@ -4,7 +4,8 @@ import { newItemId } from '../lib/ids'
 import { toast } from '../lib/toast'
 import type { Session } from '../net/session'
 import { FileListDir, HandleDir, readEntryTree, type DirSource } from '../net/sources'
-import { blobToDataURL, makeThumb } from '../net/thumbs'
+import { MEDIA_SIDE, mediaBox } from '../lib/media'
+import { blobToDataURL, makeThumb, mediaSize } from '../net/thumbs'
 import { DEFAULT_SIZE, FOLDER_COLORS } from './types'
 
 export type DropItem =
@@ -103,7 +104,7 @@ async function thumbFor(file: File): Promise<string | undefined> {
 }
 
 /** Nearest spot to `at` (spiralling outwards) where a w x h card overlaps no existing board card. */
-function freeSpot(s: Session, at: Vec, w: number, h: number): Vec {
+export function freeSpot(s: Pick<Session, 'store'>, at: Vec, w: number, h: number): Vec {
   const cards = s.store.getSnapshot().surface.filter((i) => i.type !== 'stroke').map(bounds)
   const gap = 24
   for (let ring = 0; ring < 12; ring++) {
@@ -134,13 +135,17 @@ export async function addDropItems(
   const { id: owner, name: ownerName } = s.profile
   let n = 0
   for (const it of items) {
-    const sz = DEFAULT_SIZE[it.kind === 'file' ? 'file' : 'folder']
+    // pictures and videos land bare, at their own aspect
+    const dims = it.kind === 'file' ? await mediaSize(it.file) : null
+    const sz = dims ? mediaBox(dims.w, dims.h) : DEFAULT_SIZE[it.kind === 'file' ? 'file' : 'folder']
     const col = n % 4
     const row = Math.floor(n / 4)
+    // grid cells fit any picture, so a mixed drop doesn't overlap
+    const cell = dims ? { w: MEDIA_SIDE, h: MEDIA_SIDE } : sz
     const pos =
       opts.avoidOverlap && !parent
-        ? freeSpot(s, { x: at.x + col * (sz.w + 20), y: at.y + row * (sz.h + 20) }, sz.w, sz.h)
-        : { x: at.x - sz.w / 2 + col * (sz.w + 20), y: at.y - sz.h / 2 + row * (sz.h + 20) }
+        ? freeSpot(s, { x: at.x + col * (cell.w + 20), y: at.y + row * (cell.h + 20) }, sz.w, sz.h)
+        : { x: at.x - sz.w / 2 + col * (cell.w + 20), y: at.y - sz.h / 2 + row * (cell.h + 20) }
     n++
     const key = newItemId()
     if (it.kind === 'file') {
@@ -149,6 +154,7 @@ export async function addDropItems(
         s.store.add({
           type: 'file', name: it.file.name, size: it.file.size, mime: mimeOf(it.file.name, it.file.type),
           owner, ownerName, key, thumb: await thumbFor(it.file), x: Math.round(pos.x), y: Math.round(pos.y), parent,
+          ...(dims && { iw: dims.w, ih: dims.h, w: sz.w, h: sz.h }),
         }),
       )
     } else {
@@ -185,3 +191,4 @@ export async function relink(s: Session, key: string, kind: 'file' | 'dir', expe
   s.p2p.relinked(key)
   return true
 }
+

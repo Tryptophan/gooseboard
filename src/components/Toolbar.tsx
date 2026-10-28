@@ -8,6 +8,7 @@ import { useUi, useUiDispatch, type Tool } from '../state/ui'
 import { ColorPicker } from './ColorPicker'
 import { openMenu } from './ContextMenu'
 import { Icon } from './Icons'
+import { MicButton } from './MicButton'
 import s from './Chrome.module.css'
 
 /** On phones the rest live in the "more" menu (finger drag already pans). */
@@ -94,6 +95,7 @@ export function Toolbar() {
             <Icon name={t.icon} />
           </button>
         ))}
+        <MicButton />
         {phone ? (
           <button className={extraOn ? s.on : ''} title="More tools" aria-haspopup="menu" onClick={more}>
             <Icon name={extraOn?.icon ?? 'plus'} />
@@ -113,7 +115,7 @@ export function Toolbar() {
         <button title="Undo  Ctrl+Z" disabled={!store.undo.canUndo()} onClick={() => store.undo.undo()}>
           <Icon name="undo" />
         </button>
-        <button title="Redo  Ctrl+Shift+Z" disabled={!store.undo.canRedo()} onClick={() => store.undo.redo()}>
+        <button title="Redo  Ctrl+Y" disabled={!store.undo.canRedo()} onClick={() => store.undo.redo()}>
           <Icon name="redo" />
         </button>
       </div>

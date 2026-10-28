@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { BoardSurface } from '../components/BoardSurface'
 import { FolderPanel } from '../components/FolderPanel'
+import { Goosey } from '../components/Goosey'
 import { NoteModal } from '../components/Note'
 import { Icon } from '../components/Icons'
 import { Minimap } from '../components/Minimap'
@@ -9,7 +10,7 @@ import { PreviewProvider } from '../components/Preview'
 import { Toasts } from '../components/Toasts'
 import { Toolbar } from '../components/Toolbar'
 import { TopBar } from '../components/TopBar'
-import { RelinkBanner, TransferPanel } from '../components/TransferPanel'
+import { RelinkBanner, useLeaveGuard } from '../components/TransferPanel'
 import { unionBounds } from '../lib/geometry'
 import { isValidBoardId } from '../lib/ids'
 import { loadCamera, saveCamera, takePendingName, touchBoard } from '../lib/storage'
@@ -53,6 +54,7 @@ function BoardLoader({ id }: { id: string }) {
 
 function Board({ id }: { id: string }) {
   const initial = useMemo(() => loadCamera(id), [id])
+  useLeaveGuard()
   return (
     <CameraProvider initial={initial}>
       <PreviewProvider>
@@ -62,8 +64,10 @@ function Board({ id }: { id: string }) {
         <FolderPanel />
         <NoteModal />
         <Toolbar />
-        <ZoomControls />
-        <TransferPanel />
+        <div className={chrome.corner}>
+          <Goosey />
+          <ZoomControls />
+        </div>
         <Minimap />
         <Toasts />
         <CameraSaver id={id} />

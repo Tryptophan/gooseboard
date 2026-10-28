@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from 'react'
 import { MAX_ZOOM, MIN_ZOOM } from '../config'
+import { isMedia } from '../lib/media'
 import { bounds, clamp, distToSegment, pointInItem, rectsIntersect, rotate, snapAngle, toLocal, unionBounds, type Rect, type Vec } from '../lib/geometry'
 import { linkBox } from '../lib/embed'
 import { isUrl } from '../lib/files'
@@ -15,6 +16,7 @@ import { useCamera, type Cam } from '../state/camera'
 import { useSession, useSnapshot } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
 import { ContextBar } from './ContextBar'
+import { toggleMic } from './MicButton'
 import { closeMenu, openMenu, type MenuEntry } from './ContextMenu'
 import { promptDialog } from './Dialog'
 import { canPreview, usePreview } from './Preview'
@@ -66,6 +68,33 @@ function overScroller(e: WheelEvent, host: HTMLElement): boolean {
     const st = getComputedStyle(n)
     if (/auto|scroll/.test(st.overflowY) && n.scrollHeight > n.clientHeight) return true
     if (/auto|scroll/.test(st.overflowX) && n.scrollWidth > n.clientWidth) return true
+  }
+  return false
+}
+
+/** Height of the browser's video control strip, in the video's own (unzoomed) pixels. */
+const VIDEO_CONTROLS_PX = 48
+
+/** True when the pointer went down on a playing video's controls, which belong to the player. */
+function onVideoControls(el: HTMLElement, e: { clientX: number; clientY: number }) {
+  if (!(el instanceof HTMLVideoElement) || !el.controls) return false
+  const r = el.getBoundingClientRect()
+  const k = el.offsetHeight ? r.height / el.offsetHeight : 1
+  return (r.bottom - e.clientY) / k < VIDEO_CONTROLS_PX
+}
+
+/** True when the pointer went down on the scrollbar of `el` or a scrollable ancestor inside its item. */
+function onScrollbar(el: HTMLElement, e: { clientX: number; clientY: number }) {
+  for (let n: HTMLElement | null = el; n && !n.dataset.itemId; n = n.parentElement) {
+    const sx = n.scrollWidth > n.clientWidth
+    const sy = n.scrollHeight > n.clientHeight
+    if (!sx && !sy) continue
+    const r = n.getBoundingClientRect()
+    // the world layer is zoomed: rects are on screen, client sizes are not
+    const k = n.offsetWidth ? r.width / n.offsetWidth : 1
+    const x = (e.clientX - r.left) / k
+    const y = (e.clientY - r.top) / k
+    if ((sy && x > n.clientLeft + n.clientWidth) || (sx && y > n.clientTop + n.clientHeight)) return true
   }
   return false
 }
@@ -354,6 +383,8 @@ export function BoardSurface() {
       }
     }
     if (target.closest('button, input, a, textarea, select, [data-nodrag]')) return
+    // a note's own scrollbar scrolls it rather than grabbing the note
+    if (onScrollbar(target, e) || onVideoControls(target, e)) return
     const handleEl = target.closest<HTMLElement>('[data-handle]')
     const id = target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
     if (u.editing) {
@@ -558,7 +589,9 @@ export function BoardSurface() {
         const min = 40
         let w = sx ? Math.max(min, sx * d.x) : o.w
         let h = sy ? Math.max(min, sy * d.y) : o.h
-        if (e.shiftKey && sx && sy) {
+        // pictures and videos keep their aspect unless Shift is held; everything else the other way round
+        const lock = isMedia(snapRef.current.all.get(it.id)) ? !e.shiftKey : e.shiftKey
+        if (lock && sx && sy) {
           const k = Math.max(w / o.w, h / o.h)
           w = o.w * k
           h = o.h * k
@@ -1056,6 +1089,7 @@ export function BoardSurface() {
       }
       const tools: Record<string, typeof u.tool> = { v: 'select', h: 'hand', p: 'pen', e: 'eraser', n: 'note', f: 'folder', k: 'link' }
       if (tools[k]) dispatch({ type: 'tool', tool: tools[k] })
+      else if (k === 'm') toggleMic()
     }
 
     const onKeyUp = (e: KeyboardEvent) => {

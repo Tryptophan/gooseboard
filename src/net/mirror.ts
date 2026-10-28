@@ -3,7 +3,8 @@ import { SMALL_FILE } from '../config'
 
 /**
  * Copies of other people's files that THIS browser holds and can serve, keyed by content hash.
- * - 'blob': small files (<= SMALL_FILE) cached in IndexedDB; survive reloads everywhere.
+ * - 'blob': small files (<= SMALL_FILE), and any file synced on purpose, cached in IndexedDB;
+ *   survive reloads everywhere.
  * - 'handle': a large download saved via the File System Access API (Chromium); served from
  *   that file on disk while read permission holds and it hasn't changed since saving.
  * - 'mem': a large download on browsers without save handles (Firefox); this session only.
@@ -111,9 +112,9 @@ export class Mirror {
     return null
   }
 
-  async put(hash: string, info: MirrorInfo, src: { blob: Blob } | { handle: any; file: File }) {
+  async put(hash: string, info: MirrorInfo, src: { blob: Blob } | { handle: any; file: File }, o: { persist?: boolean } = {}) {
     const prev = this.map.get(hash)
-    const kind: MirrorEntry['kind'] = 'handle' in src ? 'handle' : prev?.kind === 'blob' || src.blob.size <= SMALL_FILE ? 'blob' : 'mem'
+    const kind: MirrorEntry['kind'] = 'handle' in src ? 'handle' : prev?.kind === 'blob' || src.blob.size <= SMALL_FILE || o.persist ? 'blob' : 'mem'
     const e: MirrorEntry = {
       hash, name: info.name, mime: info.mime, kind, at: Date.now(),
       size: 'handle' in src ? src.file.size : src.blob.size,
@@ -157,6 +158,24 @@ export class Mirror {
         if (e.kind !== 'mem') await set(e.hash, e, metaStore).catch(() => {})
       } else await this.remove(e.hash, false)
     }
+    this.bump()
+  }
+
+  /** Copies held for other people's files, for Goosey's storage settings. Saved-to-disk copies live in the person's own folders. */
+  stats() {
+    let count = 0
+    let bytes = 0
+    for (const e of this.map.values()) {
+      count++
+      if (e.kind !== 'handle') bytes += e.size
+    }
+    return { count, bytes }
+  }
+
+  /** Forgets every cached copy (files saved to disk stay there). Boards fetch again as needed. */
+  async clear() {
+    await this.ready
+    for (const hash of [...this.map.keys()]) await this.remove(hash, false)
     this.bump()
   }
 

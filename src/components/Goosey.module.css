@@ -1,0 +1,85 @@
+.wrap { position: relative; flex: none; }
+
+/* --- the goose --- */
+.goose {
+  --size: 72px;
+  width: var(--size); height: var(--size); padding: 0; border: 0; background: transparent; cursor: pointer; display: block;
+  border-radius: 16px; -webkit-tap-highlight-color: transparent;
+}
+.goose:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.art { display: block; filter: drop-shadow(0 2px 6px rgba(15, 30, 70, 0.25)); }
+.art * { transform-box: view-box; }
+.tile { fill: #2f6df6; }
+.white { fill: #fff; }
+.beak { fill: #ffb020; }
+.eye { fill: #1b2a4a; transform-origin: 32px 21.5px; animation: blink 5.5s infinite; }
+/* the neck pivots near the bottom edge of the tile */
+.head { transform-origin: 31px 64px; transition: transform 0.45s cubic-bezier(0.3, 1.4, 0.5, 1); }
+.neck { animation: bob 3.2s ease-in-out infinite; }
+.goose:hover .neck { animation-duration: 1.4s; }
+.open .head { transform: rotate(-8deg) !important; }
+.hop .art { animation: hop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); }
+
+@keyframes blink { 0%, 94%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
+@keyframes bob { 50% { transform: translateY(1.5px); } }
+@keyframes hop { 40% { transform: translateY(-6px) scale(1.04, 0.96); } }
+@keyframes rise { from { opacity: 0; transform: translateY(6px) scale(0.97); } }
+
+/* --- the menu: rises out of the goose, tail pointing down at him --- */
+.bubble {
+  position: absolute; left: 0; bottom: calc(100% + 12px); z-index: 41; transform-origin: 30px 100%;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); color: var(--text);
+  animation: rise 0.18s ease-out;
+}
+.bubble::after {
+  content: ''; position: absolute; left: 34px; bottom: -7px; width: 12px; height: 12px; background: var(--panel);
+  border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); transform: rotate(45deg);
+}
+/* one fixed height for every tab, so switching tabs or loading model info never resizes it */
+.menu.menu { position: absolute; width: 360px; padding: 0; display: flex; flex-direction: column; height: min(560px, calc(100vh - 180px - var(--sat) - var(--sab))); }
+.tabs { display: flex; gap: 2px; padding: 6px; border-bottom: 1px solid var(--border); flex: none; }
+.tabs button, .segmented button {
+  flex: 1; padding: 6px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; font-weight: 550; font-size: 13px;
+}
+.tabs button:hover, .segmented button:hover { background: var(--hover); color: var(--text); }
+.tabs .on, .segmented .on { background: var(--accent-soft); color: var(--accent); }
+.page { flex: 1; overflow: auto; padding: 8px 14px 14px; min-height: 0; border-radius: 0 0 14px 14px; }
+.sub { display: block; margin-top: 14px; }
+.page > .sub:first-child { margin-top: 6px; }
+.field { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; }
+.field span { flex: 1; }
+.field select { padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: inherit; font-size: 13px; }
+.segmented { display: flex; gap: 2px; padding: 3px; margin: 8px 0; border: 1px solid var(--border); border-radius: 10px; }
+.menu .stores li { font-family: inherit; font-size: 12.5px; padding: 2px 4px; }
+.stores li > span:first-child { flex: 1; }
+.stores button { width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.stores button:hover:not(:disabled) { background: var(--hover); color: var(--danger); }
+.stores button:disabled { opacity: 0.35; cursor: default; }
+.menu .tips { padding-left: 18px; list-style: disc; display: block; }
+.menu .tips li { display: list-item; overflow: visible; white-space: normal; font-family: inherit; font-size: 13px; color: var(--muted); margin: 4px 0; line-height: 1.4; }
+.keys { margin: 8px 0 0; display: grid; gap: 3px; }
+.keys div { display: flex; gap: 10px; align-items: baseline; }
+.keys dt { flex: none; width: 128px; }
+.keys dd { margin: 0; color: var(--muted); }
+.keys kbd { font-family: var(--mono); font-size: 11.5px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg); white-space: nowrap; }
+
+
+@media (max-width: 720px) {
+  .goose { --size: 56px; }
+  .menu.menu { width: calc(100vw - 24px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eye, .neck, .hop .art, .bubble { animation: none; }
+  .head { transition: none; }
+}
+
+/* transfers in progress: a ring on his shoulder */
+.badge {
+  position: absolute; top: -6px; right: -6px; width: 28px; height: 28px; padding: 0; display: grid; place-items: center;
+  border: 1px solid var(--border); border-radius: 50%; background: var(--panel); color: var(--text); box-shadow: var(--shadow); cursor: pointer;
+}
+.badge svg { position: absolute; inset: 1px; transform: rotate(-90deg); }
+.badge span { position: relative; font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ringBg { fill: none; stroke: var(--hover); stroke-width: 2.5; }
+.ring { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; transition: stroke-dashoffset 0.3s; }

@@ -57,7 +57,9 @@
 .contextBar .danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger-strong); }
 .swatch { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border); padding: 0; cursor: pointer; margin: 0 2px; flex: none; }
 .contextBar .swatch { width: 20px; height: 20px; }
-.rainbow, .contextBar .rainbow { background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red); position: relative; overflow: hidden; }
+/* button.rainbow:hover outranks the bar's grey hover background, which would hide the gradient */
+.rainbow, .contextBar .rainbow, .contextBar button.rainbow:hover { background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red); position: relative; overflow: hidden; }
+.contextBar button.swatch:hover { filter: brightness(1.08); }
 .sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
 
 .empty {

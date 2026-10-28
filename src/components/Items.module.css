@@ -27,6 +27,9 @@
   border: 1px solid var(--border); box-shadow: var(--shadow);
 }
 .sync b { font-weight: 600; color: var(--text); }
+/* will-change: always on its own layer, so the icons don't snap a fraction of a pixel when the fade ends */
+.file .sync { opacity: 0; transition: opacity 0.12s; will-change: opacity; }
+.file:hover .sync, .selected .sync, .pinned .sync { opacity: 1; }
 .sync.solo { width: 20px; padding: 0; justify-content: center; }
 .sync.synced { color: var(--ok); }
 .sync.syncing { color: var(--accent); }
@@ -43,13 +46,17 @@
 .dot.online, .dot.mine { background: var(--ok); }
 .dot.offline { background: var(--muted); }
 .dot.unlinked { background: var(--warn); }
-.actions { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.12s; }
+.actions { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.12s; will-change: opacity; }
 .file:hover .actions, .selected .actions { opacity: 1; }
 .actions button {
   width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; cursor: pointer;
   border: 1px solid var(--border); background: var(--panel); box-shadow: var(--shadow);
 }
 .actions button:hover { background: var(--hover); }
+.actions.actionsOn { opacity: 1; }
+.actions button.warn { background: var(--warn); border-color: var(--warn); color: #1f2328; }
+.actions button.warn:hover { background: var(--warn); filter: brightness(1.08); }
+.actions button[aria-disabled='true'] { opacity: 0.45; cursor: default; }
 
 .favicon { width: 36px; height: 36px; border-radius: 10px; background: var(--hover); display: grid; place-items: center; flex: none; overflow: hidden; }
 .favicon img { width: 22px; height: 22px; }

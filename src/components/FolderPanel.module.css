@@ -32,10 +32,11 @@
 .noteText { place-items: start; padding: 6px 8px; font-size: 11.5px; line-height: 1.3; color: #1f2328; overflow: hidden; cursor: default; }
 .childName { font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .childSub { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.childActions { position: absolute; top: 12px; right: 12px; display: flex; gap: 2px; opacity: 0; transition: opacity 0.1s; }
+.childActions { position: absolute; top: 12px; right: 12px; display: flex; gap: 2px; opacity: 0; transition: opacity 0.1s; will-change: opacity; }
 .child:hover .childActions, .child:focus-within .childActions { opacity: 1; }
 .childActions button, .childActions a { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); cursor: pointer; color: var(--text); }
 .childActions button:hover, .childActions a:hover { background: var(--hover); }
+.colorDot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.2); }
 .child { cursor: default; outline: none; }
 .child:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
 .child.selected { border-color: var(--accent); background: var(--accent-soft); }
@@ -44,7 +45,7 @@
 
 /* phones: full-width sheet between the top bar and the toolbar */
 @media (max-width: 720px) {
-  .panel { top: calc(62px + var(--sat)); left: calc(8px + var(--sal)); right: calc(8px + var(--sar)); bottom: calc(76px + var(--sab)); width: auto; }
+  .panel { top: calc(66px + var(--sat)); left: calc(8px + var(--sal)); right: calc(8px + var(--sar)); bottom: calc(76px + var(--sab)); width: auto; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
 }
 /* no hover on touch: file actions always shown; bigger targets */

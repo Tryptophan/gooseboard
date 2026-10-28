@@ -1,9 +1,15 @@
-.box { position: absolute; inset: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 6px 16px rgba(0,0,0,.14); }
+.box { position: absolute; inset: 0; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 6px 16px rgba(0,0,0,.14); }
+.title + .prose { padding-top: 6px; }
+.title {
+  flex: none; width: 100%; padding: 10px 14px 0; border: 0; background: transparent; outline: none;
+  font-family: inherit; font-weight: 700; font-size: 1.15em; line-height: 1.25; color: #1f2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.title::placeholder { color: rgba(31, 35, 40, 0.4); }
 .prose {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 12px 14px;
-  font-size: 15px;
   line-height: 1.4;
   color: #1f2328;
   word-break: break-word;
@@ -29,6 +35,15 @@
 .prose pre code { background: none; padding: 0; }
 .prose blockquote { margin: 0 0 0.45em; padding-left: 0.8em; border-left: 3px solid rgba(0, 0, 0, 0.25); }
 .prose a { color: #1a56db; text-decoration: underline; }
+.dots { flex: none; display: flex; gap: 0.3em; padding: 0 14px 12px; }
+.dots i { width: 0.45em; height: 0.45em; border-radius: 50%; background: #1f2328; opacity: 0.25; animation: dot 1.2s ease-in-out infinite; }
+.big + .dots { padding: 0 24px 20px; }
+/* on the board the dots sit inside the text, under the last line */
+.prose .dots { padding: 0.2em 0 0; }
+.dots i:nth-child(2) { animation-delay: 0.15s; }
+.dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes dot { 30% { opacity: 0.75; transform: translateY(-0.2em); } 60% { opacity: 0.25; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .dots i { animation: none; opacity: 0.5; } }
 .editing :global(.ProseMirror) { outline: none; min-height: 100%; cursor: text; }
 .editing :global(.ProseMirror p.is-editor-empty:first-child::before) {
   content: attr(data-placeholder);
@@ -43,6 +58,8 @@
   color: var(--text); border: 0; background: transparent; cursor: pointer;
 }
 .toolbar button:hover { background: var(--hover); }
+.toolbar .textSize { width: auto; padding: 0 6px; font-weight: 700; font-size: 13px; }
+.toolbar .sep { width: 1px; align-self: stretch; margin: 4px 3px; background: var(--border); }
 .toolbar button.on { background: var(--accent-soft); color: var(--accent); }
 .toolbar.bare { padding: 0; border: 0; background: none; box-shadow: none; justify-content: center; }
 .backdrop { position: fixed; inset: 0; z-index: 100; background: rgba(8, 10, 16, 0.6); display: grid; place-items: center; padding: 24px; }
@@ -57,13 +74,15 @@
   border: 0; border-radius: 8px; background: rgba(255, 255, 255, 0.55); color: #1f2328; cursor: pointer;
 }
 .close:hover { background: #fff; }
-.prose.big { flex: 1; height: auto; min-height: 0; padding: 16px 24px 24px; font-size: 17px; line-height: 1.5; }
+.prose.big { flex: 1; height: auto; min-height: 0; padding: 12px 24px 24px; line-height: 1.5; }
+.title.big { padding: 14px 24px 0; font-size: 1.4em; }
 
 /* phones: the note window fills the screen */
 @media (max-width: 720px) {
   .backdrop { padding: 0; }
   .window { width: 100%; height: 100%; border-radius: 0; padding: var(--sat) var(--sar) var(--sab) var(--sal); }
   .prose.big { padding: 12px 16px 24px; }
+  .title.big { padding: 12px 16px 0; }
 }
 @media (pointer: coarse) {
   .toolbar button { width: 38px; height: 38px; }

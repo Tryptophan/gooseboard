@@ -2,6 +2,8 @@
   position: fixed; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 6px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
 }
+/* both top bars as tall as the right one's buttons need, so their edges line up */
+.topLeft, .topRight { min-height: 48px; }
 .topLeft { top: calc(12px + var(--sat)); left: calc(12px + var(--sal)); }
 .topRight { top: calc(12px + var(--sat)); right: calc(12px + var(--sar)); }
 .logo { display: grid; place-items: center; border-radius: 8px; }
@@ -38,8 +40,10 @@
 .popover ul { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; }
 .popover li { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .popover input[type='text'], .mePop input:not([type]) { width: 100%; margin: 8px 0; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); }
-.connPop { top: calc(62px + var(--sat)); left: calc(12px + var(--sal)); }
-.mePop { top: calc(62px + var(--sat)); right: calc(12px + var(--sar)); width: 260px; }
+/* 8px under the top bars (12px down, 48px tall), and never past 16px from the bottom: longer ones scroll */
+.connPop, .mePop { --top: calc(68px + var(--sat)); top: var(--top); max-height: calc(100dvh - var(--top) - 16px - var(--sab)); overflow-y: auto; }
+.connPop { left: calc(12px + var(--sal)); }
+.mePop { right: calc(12px + var(--sar)); width: 260px; }
 .muted { color: var(--muted); }
 .swatches { display: flex; flex-wrap: wrap; gap: 4px; }
 
@@ -49,6 +53,12 @@
 .toolbar button:hover:not(:disabled) { background: var(--hover); }
 .toolbar button:disabled { opacity: 0.35; cursor: default; }
 .toolbar button.on { background: var(--accent-soft); color: var(--accent); }
+/* the mic: red while listening, pulsing while it hears speech */
+.toolbar button.micLive { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.toolbar button.micHeard { animation: heard 0.9s ease-in-out infinite; }
+.toolbar button.micStarting { color: var(--muted); animation: heard 1.4s ease-in-out infinite; }
+@keyframes heard { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 28%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .toolbar button.micHeard, .toolbar button.micStarting { animation: none; } }
 .sep { width: 1px; height: 24px; background: var(--border); margin: 0 6px; flex: none; }
 .brush { display: flex; align-items: center; gap: 4px; padding: 6px 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); flex-wrap: wrap; justify-content: center; }
 .swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border); padding: 0; cursor: pointer; flex: none; }
@@ -57,7 +67,8 @@
 .range { width: 100px; margin: 0 6px; accent-color: var(--accent); }
 .dotPreview { border-radius: 50%; display: inline-block; max-width: 40px; max-height: 40px; }
 
-.zoom { position: fixed; z-index: 30; left: calc(12px + var(--sal)); bottom: calc(16px + var(--sab)); display: flex; align-items: center; gap: 2px; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+.corner { position: fixed; z-index: 30; left: calc(12px + var(--sal)); bottom: calc(16px + var(--sab)); display: flex; align-items: flex-end; gap: 8px; }
+.zoom { display: flex; align-items: center; gap: 2px; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
 .zoom button { height: 32px; min-width: 32px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 8px; cursor: pointer; padding: 0 6px; font-variant-numeric: tabular-nums; }
 .zoom button:hover { background: var(--hover); }
 .minimap { position: fixed; z-index: 30; right: calc(12px + var(--sar)); bottom: calc(16px + var(--sab)); background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); cursor: pointer; touch-action: none; }
@@ -67,17 +78,7 @@
 .toast { pointer-events: auto; background: #20242b; color: #fff; padding: 9px 14px; border-radius: 10px; box-shadow: var(--shadow-lg); font-size: 13.5px; display: flex; gap: 12px; align-items: center; max-width: 90vw; }
 .toast button { background: transparent; border: 1px solid rgba(255, 255, 255, 0.4); color: #fff; border-radius: 6px; padding: 2px 8px; cursor: pointer; }
 
-.tNotice, .tButton { position: fixed; z-index: 30; left: calc(12px + var(--sal)); bottom: calc(66px + var(--sab)); background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
-.tNotice { width: 300px; padding: 4px 6px 6px; }
-.tNotice .bar { margin: 2px 4px 0; }
-.tNoticeTop { display: flex; align-items: center; gap: 4px; }
-.tNoticeMain { flex: 1; min-width: 0; gap: 6px; background: transparent; border: 0; border-radius: 8px; padding: 5px 4px; cursor: pointer; color: var(--text); text-align: left; display: flex; align-items: center; }
-.tNoticeMain:hover, .tIconBtn:hover { background: var(--hover); }
-.tIconBtn { background: transparent; border: 0; cursor: pointer; border-radius: 6px; padding: 4px 6px; display: inline-grid; place-items: center; }
-.tPct { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.tButton { width: 42px; height: 42px; display: grid; place-items: center; cursor: pointer; padding: 0; }
-.tButton:hover { background: var(--hover); }
-.tModal { width: min(460px, 100%); max-height: min(560px, calc(100vh - 32px)); }
+.tSummary { color: var(--muted); font-size: 12.5px; font-weight: 500; }
 .tList { overflow: auto; min-height: 0; margin: 0 -6px; padding: 0 6px; }
 .transfersHead { display: flex; justify-content: space-between; align-items: center; font-weight: 650; }
 .transfersHead span { display: flex; gap: 2px; }
@@ -97,18 +98,26 @@
 .relinkRow button { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); cursor: pointer; }
 .relinkRow .primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 
+/* narrower screens: zoom stacks above Goosey so the corner stays clear of the toolbar */
+@media (max-width: 1100px) {
+  .corner { flex-direction: column-reverse; align-items: flex-start; }
+}
+
 @media (max-width: 720px) {
   .minimap { display: none; }
-  .topLeft, .topRight { gap: 4px; padding: 4px; }
+  .topLeft, .topRight { gap: 4px; padding: 4px; min-height: 46px; }
   .boardName { min-width: 40px; max-width: 26vw; }
   .status { padding: 8px; }
   .label { display: none; }
   .shareBtn { padding: 9px; }
-  .tNotice, .tButton { bottom: calc(120px + var(--sab)); }
-  .tNotice { width: calc(100vw - 24px); }
-  /* the brush row above the toolbar needs the bottom-left corner, so zoom sits under the top bar */
-  .zoom { top: calc(58px + var(--sat)); bottom: auto; }
+  /* the toolbar needs the bottom edge: Goosey stands just above it, and above the brush row while that's open */
+  .corner { bottom: calc(82px + var(--sab)); flex-direction: column-reverse; align-items: flex-start; }
+  .toolbarWrap:has(.brush) ~ .corner { bottom: calc(152px + var(--sab)); }
+  /* ...and zoom sits 8px under the top bar (12px down, 46px tall) */
+  .zoom { position: fixed; z-index: 30; left: calc(12px + var(--sal)); top: calc(66px + var(--sat)); }
   .popover { width: calc(100vw - 24px); }
+  /* level with zoom, which sits right under the top bar */
+  .connPop, .mePop { --top: calc(66px + var(--sat)); }
 }
 
 /* fingers: pinch zooms, so only the readout (reset) and fit stay; bigger targets */
@@ -121,4 +130,10 @@
   .toolbar button { width: 44px; height: 44px; }
   .swatch { width: 28px; height: 28px; }
   .range { width: 120px; }
+}
+
+/* phones: toolbar buttons shrink (staying square) rather than push undo/redo off the edge; after the
+   touch rule above, which would otherwise pin them at 44px */
+@media (max-width: 720px) {
+  .toolbar button { flex: 0 1 auto; width: 44px; min-width: 30px; height: auto; aspect-ratio: 1; }
 }

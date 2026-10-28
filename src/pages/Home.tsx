@@ -227,7 +227,7 @@ function OnlineNow({ users }: { users: PresenceUser[] }) {
   const ref = useRef<HTMLSpanElement>(null)
   const budget = useBudget(ref, 1)
   return (
-    <span ref={ref} className={s.online} title={users.length ? `${users.length} on this board now` : undefined}>
+    <span ref={ref} className={s.online}>
       {users.length > 0 && (
         <>
           {budget - 70 >= 30 && <AvatarStack users={users} budget={budget - 70} />}

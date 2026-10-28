@@ -40,6 +40,8 @@ const P: Record<string, ReactNode> = {
   heading: <path d="M6 4v16M18 4v16M6 12h12" />,
   code: <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />,
   follow: <path d="M12 5a7 7 0 100 14 7 7 0 000-14zM12 9a3 3 0 100 6 3 3 0 000-6z" />,
+  cloudDown: <path d="M7 18a4.5 4.5 0 01-.6-8.96A6 6 0 0118 8.5a4.25 4.25 0 01-.5 8.47M12 11v9M8.5 16.5L12 20l3.5-3.5" />,
+  mic: <path d="M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zM5 11a7 7 0 0014 0M12 18v3" />,
   lock: <path d="M6 11h12v9H6zM8 11V8a4 4 0 018 0v3" />,
 }
 

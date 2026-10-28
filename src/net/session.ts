@@ -49,7 +49,7 @@ function create(id: string): Session {
     id,
   )
   const files = new FileService(p2p, profile, transfers, mirror, id)
-  const sync = new FileSync(store, p2p, mirror, sources, files, profile)
+  const sync = new FileSync(store, p2p, mirror, sources, files, profile, transfers)
   store.onLoaded(() => {
     const all = [...store.getSnapshot().all.values()]
     // restore persisted handles (Chromium) for everything this person shares, without prompting

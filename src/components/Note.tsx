@@ -4,23 +4,65 @@ import Collaboration from '@tiptap/extension-collaboration'
 import Placeholder from '@tiptap/extension-placeholder'
 import type * as Y from 'yjs'
 import { fragmentToHTML, noteExtensions, toggleTask } from '../model/noteSchema'
-import type { NoteItem } from '../model/types'
+import { voice } from '../ai/voice'
+import { NOTE_FONT_SIZES, type NoteFontSize, type NoteItem } from '../model/types'
 import { useCoarse } from '../lib/touch'
 import { useSession, useSnapshot } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
+import { openMenu } from './ContextMenu'
 import { Icon } from './Icons'
 import s from './Note.module.css'
+
+/** The note's look: its colour and text size (the window shows text a little larger). */
+const boxStyle = (item: NoteItem, k = 1) => ({ background: item.color, fontSize: NOTE_FONT_SIZES[item.fontSize ?? 'm'] * k })
+
+/** The note's title, editable in place; Enter moves on to the text. */
+function TitleInput({ item, editor, big }: { item: NoteItem; editor: Editor | null; big?: boolean }) {
+  const { store } = useSession()
+  return (
+    <input
+      className={`${s.title} ${big ? s.big : ''}`}
+      value={item.title ?? ''}
+      placeholder="Title"
+      aria-label="Note title"
+      maxLength={200}
+      onChange={(e) => store.update(item.id, { title: e.target.value || undefined })}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== 'ArrowDown') return
+        e.preventDefault()
+        if (!editor) return
+        // focus synchronously (Tiptap's focus command waits a frame), so the next keystroke lands in the text
+        editor.view.focus()
+        editor.commands.focus('start')
+      }}
+    />
+  )
+}
+
+/** "…" under the text while a voice note is still coming into this note. */
+function VoiceDots({ id }: { id: string }) {
+  const waiting = useSyncExternalStore(voice.subscribe, () => voice.waiting(id))
+  if (!waiting) return null
+  return (
+    <div className={s.dots} role="status" aria-label="Listening">
+      <i />
+      <i />
+      <i />
+    </div>
+  )
+}
 
 export function NoteBody({ item, editing }: { item: NoteItem; editing: boolean }) {
   const { store } = useSession()
   const fragment = useMemo(() => store.noteFragment(item.id), [store, item.id])
   if (!fragment) return null
-  return editing ? <NoteEditor fragment={fragment} color={item.color} /> : <NoteStatic fragment={fragment} color={item.color} />
+  return editing ? <NoteEditor fragment={fragment} item={item} /> : <NoteStatic fragment={fragment} item={item} />
 }
 
-function NoteStatic({ fragment, color }: { fragment: Y.XmlFragment; color: string }) {
+function NoteStatic({ fragment, item }: { fragment: Y.XmlFragment; item: NoteItem }) {
   const { store } = useSession()
   const coarse = useCoarse()
+  const waiting = useSyncExternalStore(voice.subscribe, () => voice.waiting(item.id))
   const [html, setHtml] = useState(() => fragmentToHTML(fragment))
   useEffect(() => {
     let raf = 0
@@ -45,8 +87,14 @@ function NoteStatic({ fragment, color }: { fragment: Y.XmlFragment; color: strin
     store.transact(() => toggleTask(fragment, index))
   }
   return (
-    <div className={s.box} style={{ background: color }}>
-      <div className={s.prose} onClick={onClick} dangerouslySetInnerHTML={{ __html: html || `<p class="empty">${coarse ? 'Double-tap' : 'Double-click'} to write…</p>` }} />
+    <div className={s.box} style={boxStyle(item)}>
+      {item.title && <div className={s.title}>{item.title}</div>}
+      <div className={s.prose} onClick={onClick}>
+        {/* an empty note being spoken into shows just the dots, not the "write here" hint */}
+        <div dangerouslySetInnerHTML={{ __html: html || (waiting ? '' : `<p class="empty">${coarse ? 'Double-tap' : 'Double-click'} to write…</p>`) }} />
+        {/* right after the text, where the next words will appear */}
+        <VoiceDots id={item.id} />
+      </div>
     </div>
   )
 }
@@ -74,7 +122,7 @@ const subscribe = (l: () => void) => {
 }
 export const useBoardNoteEditor = () => useSyncExternalStore(subscribe, () => boardEditor)
 
-function NoteEditor({ fragment, color }: { fragment: Y.XmlFragment; color: string }) {
+function NoteEditor({ fragment, item }: { fragment: Y.XmlFragment; item: NoteItem }) {
   const editor = useNoteEditor(fragment)
   useEffect(() => {
     if (!editor) return
@@ -84,8 +132,10 @@ function NoteEditor({ fragment, color }: { fragment: Y.XmlFragment; color: strin
     }
   }, [editor])
   return (
-    <div className={s.box} style={{ background: color }}>
+    <div className={s.box} style={boxStyle(item)}>
+      <TitleInput item={item} editor={editor} />
       <EditorContent editor={editor} className={`${s.prose} ${s.editing}`} />
+      <VoiceDots id={item.id} />
     </div>
   )
 }
@@ -103,10 +153,10 @@ export function NoteModal() {
   }, [gone, dispatch])
   const fragment = useMemo(() => (item?.type === 'note' ? store.noteFragment(item.id) : null), [store, item?.id, item?.type])
   if (item?.type !== 'note' || !fragment) return null
-  return <NoteWindow key={item.id} fragment={fragment} color={item.color} onClose={() => dispatch({ type: 'noteModal', id: null })} />
+  return <NoteWindow key={item.id} fragment={fragment} item={item} onClose={() => dispatch({ type: 'noteModal', id: null })} />
 }
 
-function NoteWindow({ fragment, color, onClose }: { fragment: Y.XmlFragment; color: string; onClose: () => void }) {
+function NoteWindow({ fragment, item, onClose }: { fragment: Y.XmlFragment; item: NoteItem; onClose: () => void }) {
   const editor = useNoteEditor(fragment)
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -115,20 +165,25 @@ function NoteWindow({ fragment, color, onClose }: { fragment: Y.XmlFragment; col
   }, [onClose])
   return (
     <div className={s.backdrop} onClick={onClose} data-nodrag>
-      <div className={s.window} style={{ background: color }} onClick={(e) => e.stopPropagation()}>
+      <div className={s.window} style={boxStyle(item, 17 / 15)} onClick={(e) => e.stopPropagation()}>
         <div className={s.windowHead}>
-          {editor && <NoteToolbar editor={editor} variant="inline" />}
+          {editor && <NoteToolbar editor={editor} item={item} variant="inline" />}
           <button className={s.close} onClick={onClose} title="Close  Esc" aria-label="Close">
             <Icon name="close" size={16} />
           </button>
         </div>
+        <TitleInput item={item} editor={editor} big />
         <EditorContent editor={editor} className={`${s.prose} ${s.editing} ${s.big}`} />
+        <VoiceDots id={item.id} />
       </div>
     </div>
   )
 }
 
-export function NoteToolbar({ editor, variant }: { editor: Editor; variant: 'inline' | 'bare' }) {
+const SIZE_LABEL: Record<NoteFontSize, string> = { s: 'Small text', m: 'Medium text', l: 'Large text', xl: 'Extra large text' }
+
+export function NoteToolbar({ editor, item, variant }: { editor: Editor; item: NoteItem; variant: 'inline' | 'bare' }) {
+  const { store } = useSession()
   const [, force] = useState(0)
   useEffect(() => {
     const h = () => force((n) => n + 1)
@@ -151,6 +206,31 @@ export function NoteToolbar({ editor, variant }: { editor: Editor; variant: 'inl
       {B('Numbers', 'ol', () => c().toggleOrderedList().run(), editor.isActive('orderedList'))}
       {B('Checklist', 'check', () => c().toggleTaskList().run(), editor.isActive('taskList'))}
       {B('Code', 'code', () => c().toggleCodeBlock().run(), editor.isActive('codeBlock'))}
+      <span className={s.sep} />
+      <button
+        className={s.textSize}
+        title="Text size"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect()
+          const cur = item.fontSize ?? 'm'
+          openMenu(
+            { clientX: r.left, clientY: r.bottom + 6, preventDefault() {}, stopPropagation() {} },
+            (Object.keys(SIZE_LABEL) as NoteFontSize[]).map((k) => ({
+              label: SIZE_LABEL[k],
+              icon: k === cur ? 'check' : undefined,
+              onSelect: () => {
+                store.undo.stopCapturing()
+                store.update(item.id, { fontSize: k === 'm' ? undefined : k })
+                // the menu took focus: hand it back to the text
+                editor.commands.focus()
+              },
+            })),
+          )
+        }}
+      >
+        Aa
+      </button>
     </div>
   )
 }

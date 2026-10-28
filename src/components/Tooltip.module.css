@@ -1,0 +1,8 @@
+.tip {
+  position: fixed; z-index: 200; max-width: min(280px, calc(100vw - 16px)); padding: 5px 9px; border-radius: 7px;
+  background: #20242b; color: #fff; font-size: 12px; line-height: 1.35; white-space: pre-line; pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); animation: tip 0.1s ease-out;
+}
+:global(:root[data-theme='dark']) .tip { background: #eef1f6; color: #15181d; }
+@keyframes tip { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tip { animation: none; } }

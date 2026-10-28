@@ -1,3 +1,4 @@
+import { isMedia } from '../lib/media'
 import { embedFor } from '../lib/embed'
 import type { Item } from '../model/types'
 import { unionBounds } from '../lib/geometry'
@@ -14,7 +15,9 @@ const HANDLES = [
   { id: 'w', x: 0, y: 0.5, cur: 'ew-resize' },
 ]
 
-export const isResizable = (it: Item) => it.type === 'note' || it.type === 'stroke' || (it.type === 'link' && !it.card && !!embedFor(it.url))
+export const isResizable = (it: Item) => it.type === 'note' || it.type === 'stroke' || isMedia(it) || (it.type === 'link' && !it.card && !!embedFor(it.url))
+/** pictures and videos keep their aspect, so they only get corner handles */
+const handlesFor = (it: Item) => (isMedia(it) ? HANDLES.filter((h) => h.id.length === 2) : HANDLES)
 
 /** Outlines for every selected item; resize/rotate handles when exactly one is selected. */
 export function SelectionOverlay({ items, editing }: { items: Item[]; editing: boolean }) {
@@ -32,7 +35,7 @@ export function SelectionOverlay({ items, editing }: { items: Item[]; editing: b
         <div key={i.id} className={s.selBox} style={tf(i)}>
           {single && !editing && (
             <>
-              {isResizable(i) && HANDLES.map((h) => <div key={h.id} className={s.handle} data-handle={h.id} style={{ left: `${h.x * 100}%`, top: `${h.y * 100}%`, cursor: h.cur }} />)}
+              {isResizable(i) && handlesFor(i).map((h) => <div key={h.id} className={s.handle} data-handle={h.id} style={{ left: `${h.x * 100}%`, top: `${h.y * 100}%`, cursor: h.cur }} />)}
               <div className={s.rotStem} />
               <div className={s.rotHandle} data-handle="rot" />
             </>

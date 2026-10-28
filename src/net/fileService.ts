@@ -7,10 +7,14 @@ import type { Mirror } from './mirror'
 import type { GetReq, P2P, ReqState } from './p2p'
 import type { DirEntry } from './sources'
 import { openStream, type Stream } from './streamSW'
+import { makePreview } from './thumbs'
 import type { TransferStore } from './transfers'
 
 const CONSOLIDATE_AT = 64 * 1024 * 1024
 const listingStore = createStore('gooseboard-listings', 'listings')
+const previewStore = createStore('gooseboard-previews', 'previews')
+/** an answer bigger than this came from a peer that sent the whole file: shrink it here */
+const PREVIEW_BYTES = 1024 * 1024
 
 export interface DownloadArgs {
   ownerId: string
@@ -21,6 +25,9 @@ export interface DownloadArgs {
 }
 
 export interface StreamHandlers {
+  /** shown in the transfer list */
+  name?: string
+  peerName?: string
   onState?(s: ReqState): void
   /** a range failed (not called for ranges the player abandoned) */
   onError?(msg: string): void
@@ -29,6 +36,8 @@ export interface StreamHandlers {
 export interface BlobOpts {
   onProgress?(done: number): void
   signal?: AbortSignal
+  /** keep the copy in this browser (IndexedDB) whatever its size: syncing, not just opening */
+  keep?: boolean
 }
 
 interface Fetched {
@@ -70,6 +79,7 @@ function saveBlob(blob: Blob, name: string) {
 /** User-facing operations on remote files: thumbnails, directory listings, previews, downloads. */
 export class FileService {
   private thumbs = new Map<string, Promise<string | null>>()
+  private previews = new Map<string, Promise<string | null>>()
   private shared = new Map<string, Shared>()
 
   constructor(
@@ -121,8 +131,8 @@ export class FileService {
     await h.done
     const blob = new Blob(parts, { type: mime })
     const hash = await this.verify(req, hasher)
-    // anything small we fetched (incl. folder files someone opened) becomes servable by us
-    if (hash && blob.size <= SMALL_FILE) await this.mirror.put(hash, { name, mime, board: this.board, alias: req.alias }, { blob })
+    // anything small we fetched (incl. folder files someone opened), or synced on purpose, becomes servable by us
+    if (hash && (blob.size <= SMALL_FILE || o.keep)) await this.mirror.put(hash, { name, mime, board: this.board, alias: req.alias }, { blob }, { persist: o.keep })
     return { blob, hash }
   }
 
@@ -189,6 +199,31 @@ export class FileService {
   }
 
   /**
+   * Object URL of an image's PREVIEW_DIM rendition. Kept in IndexedDB, so a board's pictures
+   * stay sharp after a reload and while their owner is offline. Made locally from any copy we
+   * hold, otherwise by the owner or a holder.
+   */
+  imageURL(ownerId: string, key: string, hash?: string): Promise<string | null> {
+    const ck = `${ownerId}\0${key}`
+    let p = this.previews.get(ck)
+    if (!p) {
+      p = (async () => {
+        let b = await get<Blob>(ck, previewStore).catch(() => undefined)
+        if (!b) {
+          b = await this.getBlob(ownerId, { op: 'preview', kind: 'file', key, hash })
+          if (b.size > PREVIEW_BYTES) b = (await makePreview(b)) ?? b
+          void set(ck, b, previewStore).catch(() => {})
+        }
+        return URL.createObjectURL(b)
+      })().catch(() => null)
+      this.previews.set(ck, p)
+      // try again later: the owner may come online
+      p.then((u) => !u && this.previews.delete(ck))
+    }
+    return p
+  }
+
+  /**
    * Live listing from the owner. The last listing seen is kept so the folder stays browsable
    * while the owner is offline (files then come from peers who hold copies).
    */
@@ -207,16 +242,37 @@ export class FileService {
   /**
    * Seekable media URL (see streamSW): each range the player asks for is its own request,
    * served by the owner or any holder. Ranges can't be hash-verified (only whole files can),
-   * so they aren't mirrored, and they stay out of the server's transfer list.
+   * so they aren't mirrored. The whole stream is one entry in the transfer list, active while
+   * any range is in flight.
    */
   stream(ownerId: string, req: GetReq, size: number, mime: string, h: StreamHandlers = {}): Stream {
-    const base = this.withHash({ ...req, op: 'file', bg: true })
-    return openStream(size, mime, (from, to, sink) => {
+    const base = this.withHash({ ...req, op: 'file', bg: true, stream: true })
+    const tid = `stream:${crypto.randomUUID()}`
+    let inflight = 0
+    let got = 0
+    let added = false
+    const track = (d: number) => {
+      inflight += d
+      if (!added) {
+        added = true
+        const peerName = ownerId === this.self.id ? 'this device' : (h.peerName ?? 'a peer')
+        this.transfers.add({ id: tid, dir: 'down', name: h.name ?? 'stream', size, done: 0, state: 'active', peerName, startedAt: Date.now(), cancel: () => st.close() })
+      } else this.transfers.patch(tid, { state: inflight ? 'active' : 'done' })
+    }
+    const st = openStream(size, mime, (from, to, sink) => {
       let full = false
+      let open = true
+      const finish = () => open && ((open = false), track(-1))
+      track(1)
       const r = this.p2p.request(ownerId, { ...base, from, to }, {
-        onState: h.onState,
+        onState: (s) => {
+          h.onState?.(s)
+          if (s !== 'active') this.transfers.patch(tid, { state: s })
+        },
         onData: (off, b) => {
           if (full) return
+          got += b.length
+          this.transfers.patch(tid, { done: Math.min(size, got) })
           // peers on an older build ignore `to` and send the rest of the file: clip and stop them
           sink.data(off + b.length > to ? b.subarray(0, to - off) : b)
           if (off + b.length < to) return
@@ -232,9 +288,13 @@ export class FileService {
           if (e.message !== 'canceled') h.onError?.(e.message)
           sink.error(e.message)
         },
-      )
-      return () => r.cancel()
+      ).finally(finish)
+      return () => {
+        r.cancel()
+        finish()
+      }
     })
+    return st
   }
 
   /** Whole-file object URL for in-app preview (images, PDFs, media, text). */

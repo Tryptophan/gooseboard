@@ -39,7 +39,7 @@ export function Goose({ color }: { color: string }) {
 
 export function MoreChip({ hidden, onClick, children }: { hidden: string[]; onClick?: () => void; children?: ReactNode }) {
   return (
-    <button className={`${s.avatar} ${s.more}`} title={hidden.join(', ')} onClick={onClick} tabIndex={onClick ? 0 : -1}>
+    <button className={`${s.avatar} ${s.more}`} title={hidden.join(', ')} onClick={onClick} tabIndex={onClick ? 0 : -1} data-more-toggle>
       {children ?? `+${hidden.length}`}
     </button>
   )
