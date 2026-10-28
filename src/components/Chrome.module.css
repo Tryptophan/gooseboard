@@ -29,8 +29,6 @@
 .peerName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .peerList .muted { flex: none; }
 .rest { display: flex; align-items: center; gap: 8px; }
-.iconBtn { width: 34px; height: 34px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 9px; cursor: pointer; }
-.iconBtn:hover { background: var(--hover); }
 .shareBtn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: var(--accent); color: #fff; font-weight: 600; padding: 7px 14px; border-radius: 10px; cursor: pointer; }
 .shareBtn:hover { filter: brightness(1.08); }
 
@@ -126,7 +124,7 @@
 @media (pointer: coarse) {
   .zoom .step { display: none; }
   .zoom button { height: 38px; min-width: 38px; }
-  .iconBtn, .avatar { width: 36px; height: 36px; }
+  .avatar { width: 36px; height: 36px; }
   /* read-only stacks aren't tap targets and Avatars sizes them at 30px */
   .avatar.static { width: 30px; height: 30px; }
   .toolbar button { width: 44px; height: 44px; }

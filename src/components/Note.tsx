@@ -167,7 +167,7 @@ function NoteWindow({ fragment, item, onClose }: { fragment: Y.XmlFragment; item
     <div className={s.backdrop} onClick={onClose} data-nodrag>
       <div className={s.window} style={boxStyle(item, 17 / 15)} onClick={(e) => e.stopPropagation()}>
         <div className={s.windowHead}>
-          {editor && <NoteToolbar editor={editor} item={item} variant="inline" />}
+          {editor && <NoteToolbar editor={editor} variant="inline" />}
           <button className={s.close} onClick={onClose} title="Close  Esc" aria-label="Close">
             <Icon name="close" size={16} />
           </button>
@@ -182,7 +182,7 @@ function NoteWindow({ fragment, item, onClose }: { fragment: Y.XmlFragment; item
 
 const SIZE_LABEL: Record<NoteFontSize, string> = { s: 'Small text', m: 'Medium text', l: 'Large text', xl: 'Extra large text' }
 
-export function NoteToolbar({ editor, item, variant }: { editor: Editor; item: NoteItem; variant: 'inline' | 'bare' }) {
+export function NoteToolbar({ editor, variant }: { editor: Editor; variant: 'inline' | 'bare' }) {
   const { store } = useSession()
   const [, force] = useState(0)
   useEffect(() => {
@@ -209,11 +209,11 @@ export function NoteToolbar({ editor, item, variant }: { editor: Editor; item: N
       <span className={s.sep} />
       <button
         className={s.textSize}
-        title="Text size"
+        title="Text size of the selection"
         onMouseDown={(e) => e.preventDefault()}
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect()
-          const cur = item.fontSize ?? 'm'
+          const cur: NoteFontSize = editor.getAttributes('textSize').size ?? 'm'
           openMenu(
             { clientX: r.left, clientY: r.bottom + 6, preventDefault() {}, stopPropagation() {} },
             (Object.keys(SIZE_LABEL) as NoteFontSize[]).map((k) => ({
@@ -221,9 +221,9 @@ export function NoteToolbar({ editor, item, variant }: { editor: Editor; item: N
               icon: k === cur ? 'check' : undefined,
               onSelect: () => {
                 store.undo.stopCapturing()
-                store.update(item.id, { fontSize: k === 'm' ? undefined : k })
-                // the menu took focus: hand it back to the text
-                editor.commands.focus()
+                // the selected text, or what's typed next at the caret; the menu took focus, so hand it back
+                if (k === 'm') c().unsetMark('textSize').run()
+                else c().setMark('textSize', { size: k }).run()
               },
             })),
           )

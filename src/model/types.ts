@@ -19,6 +19,7 @@ export interface NoteItem extends ItemBase {
   type: 'note'
   color: string
   title?: string
+  /** the note's base text size, from before sizes were set per run of text (see TextSize) */
   fontSize?: NoteFontSize
 }
 

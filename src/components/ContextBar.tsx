@@ -56,7 +56,7 @@ export function ContextBar({ items }: { items: Item[] }) {
 
   return (
     <div ref={ref} className={s.contextBar} style={{ left, top, transform: flip ? 'translateX(-50%)' : 'translate(-50%, -100%)' }} data-nodrag>
-      {textEditor && only?.type === 'note' && <NoteToolbar editor={textEditor} item={only} variant="bare" />}
+      {textEditor && only?.type === 'note' && <NoteToolbar editor={textEditor} variant="bare" />}
       <div className={s.contextRow}>
         {palette && (
           <>

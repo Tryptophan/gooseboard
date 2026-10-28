@@ -5,7 +5,7 @@ A simple collaborative decentralized workspace for notes, drawings, files and fo
 ## Features
 
 **On the board**
-- **Notes** with a title, rich text and markdown shortcuts (`#` headings, `**bold**`, `-` lists, `[ ]` checklists, code blocks), in four text sizes. Edit in place, or open a note in its own window for longer writing.
+- **Notes** with a title, rich text and markdown shortcuts (`#` headings, `**bold**`, `-` lists, `[ ]` checklists, code blocks), with four text sizes for any run of text. Edit in place, or open a note in its own window for longer writing.
 - **Voice notes**: press the mic in the toolbar (or M) and talk. What you say is written, sentence by sentence and live for everyone, into the selected note, or a new one (in the open folder, if one is open); animated dots show while it's still listening or writing. Press it again to stop.
 - **Freehand drawing** with pressure from a stylus, plus an eraser.
 - **Files** of any kind: drop, paste or pick them. Images and videos get thumbnails. Images, video, audio, PDFs and text open in a built-in viewer, and big media streams while it loads.

@@ -4,7 +4,7 @@ import { renameBoardLocal, saveProfile, USER_COLORS } from '../lib/storage'
 import { toast } from '../lib/toast'
 import { signalStatus } from '../net/signal'
 import { usePeers, useSession } from '../state/session'
-import { useThemeToggle, useUi, useUiDispatch } from '../state/ui'
+import { useUi, useUiDispatch } from '../state/ui'
 import { copyDialog } from './Dialog'
 import { fitAvatars, Goose, MoreChip, useBudget } from './Avatars'
 import { Icon } from './Icons'
@@ -73,7 +73,6 @@ export function TopBar({ boardId }: { boardId: string }) {
   const ui = useUi()
   const dispatch = useUiDispatch()
   const conn = useConnection()
-  const theme = useThemeToggle()
   const name = useBoardName(boardId)
   const [draft, setDraft] = useState<string | null>(null)
   const [showConn, setShowConn] = useState(false)
@@ -190,9 +189,6 @@ export function TopBar({ boardId }: { boardId: string }) {
           {shown < peers.length && <MoreChip hidden={peers.slice(shown).map((p) => p.name)} onClick={() => setShowMore(!showMore)} />}
         </div>
         <div className={s.rest} ref={restRef}>
-        <button className={s.iconBtn} title={theme.dark ? 'Switch to light theme' : 'Switch to dark theme'} onClick={theme.toggle}>
-          <Icon name={theme.dark ? 'moon' : 'sun'} size={18} />
-        </button>
         <button className={s.shareBtn} onClick={() => void share()} aria-label="Share">
           <Icon name="share" size={16} /> <span className={s.label}>Share</span>
         </button>
