@@ -6,11 +6,13 @@ import { voice } from '../ai/voice'
 import { formatSize } from '../lib/files'
 import type { ThemePref } from '../lib/storage'
 import { useCoarse } from '../lib/touch'
+import { useInstallWay } from '../net/pwa'
 import { getGoosey, openMenu, subscribeGoosey, type Tab } from '../state/goosey'
 import { useSession } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
 import { confirmDialog } from './Dialog'
 import { Icon } from './Icons'
+import { install } from './Install'
 import { TransfersTab, useTransferProgress } from './TransferPanel'
 import c from './Chrome.module.css'
 import s from './Goosey.module.css'
@@ -183,9 +185,28 @@ function Settings() {
         ))}
       </div>
 
+      <InstallApp />
+
       <AutoSync />
 
       <Storage />
+    </>
+  )
+}
+
+/** Only while this browser can install Gooseboard and hasn't. */
+function InstallApp() {
+  const way = useInstallWay()
+  if (way === 'none') return null
+  return (
+    <>
+      <b className={s.sub}>App</b>
+      <div className={s.field}>
+        <span>Install Gooseboard to open it from your home screen or dock, even offline.</span>
+        <button className={s.install} onClick={() => install(way)}>
+          Install
+        </button>
+      </div>
     </>
   )
 }

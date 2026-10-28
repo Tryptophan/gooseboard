@@ -24,16 +24,20 @@ let ready = false
 
 export const canStream = () => ready
 
-export function initStreaming() {
+/** Registers the service worker (streaming, offline, share target); resolves to its registration. */
+export function initStreaming(): Promise<ServiceWorkerRegistration | undefined> {
   const sw = navigator.serviceWorker
-  if (!sw) return
+  if (!sw) return Promise.resolve(undefined)
   const check = () => void (ready = !!sw.controller)
   sw.addEventListener('controllerchange', check)
   sw.addEventListener('message', onMessage)
   sw.startMessages()
   check()
   const base = import.meta.env.BASE_URL
-  sw.register(`${base}stream-sw.js`, { scope: base }).catch((e) => console.warn('[gooseboard] streaming unavailable', e))
+  return sw.register(`${base}stream-sw.js`, { scope: base }).catch((e) => {
+    console.warn('[gooseboard] streaming unavailable', e)
+    return undefined
+  })
 }
 
 /** A URL a media element can play and seek; bytes come from `open` as the player asks for them. */

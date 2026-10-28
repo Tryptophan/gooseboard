@@ -48,6 +48,8 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   .page { padding: 24px 16px 48px; }
   /* logo, title and theme on one line; the tagline gets the full width below */
   .head { display: grid; grid-template-columns: auto 1fr auto; column-gap: 12px; row-gap: 8px; }
+  /* the install button, when there is one, sits beside the theme button */
+  .head > button + button { grid-column: 4; grid-row: 1; }
   .head > div { display: contents; }
   .head p { grid-column: 1 / -1; grid-row: 2; margin: 0; }
   .list li { flex-wrap: wrap; justify-content: flex-end; }
@@ -56,3 +58,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   /* the name fills the line beside the avatar; the colors wrap below */
   .profileRow input { flex: 1 1 calc(100% - 44px); min-width: 0; }
 }
+
+/* the share target's board picker (Share.tsx) */
+.shareTitle { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; }
+.shareWhat { margin: 0 0 22px; color: var(--muted); }

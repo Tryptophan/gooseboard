@@ -15,7 +15,7 @@ A simple collaborative decentralized workspace for notes, drawings, files and fo
 - Select, move, resize, rotate, duplicate, reorder, copy/cut/paste between boards, and undo/redo everything.
 
 **Goosey**
-- Goosey, the big goose in the bottom-left corner, holds the menus: *Settings* (theme, storage used by the speech model and cached files, with buttons to clear them), *Transfers* (every file moving to or from you, streamed videos included, with progress, cancel and errors) and *Help* (getting started and keyboard shortcuts).
+- Goosey, the big goose in the bottom-left corner, holds the menus: *Settings* (theme, storage used by the speech model and cached files, with buttons to clear them), *Transfers* (every file moving to or from you, streamed videos included, with progress, cancel and errors) and *Help* (getting started, and keyboard shortcuts, or touch gestures on phones and tablets).
 - While files are moving, a progress ring sits on his shoulder, and closing the tab asks first.
 
 **Voice notes on your device**
@@ -37,12 +37,15 @@ A simple collaborative decentralized workspace for notes, drawings, files and fo
 - Works on desktop, tablets and phones. On touch: drag to pan, pinch to zoom, double-tap to add a note, tap a selected note to edit it, and hold for the menu (hold and drag to select several items).
 - With a stylus, the pen draws while your fingers pan and zoom.
 - Light and dark themes, a minimap, and keyboard shortcuts throughout (listed in Goosey's *Help* tab).
+- **Installable app.** Install it from the download button on the home screen or Goosey's *Settings* (on iPhone and iPad, and in Firefox on Android, those show the browser's own steps). Once loaded it opens offline, and boards open and edit offline too, syncing when people are back. A new version downloads in the background and waits until you press *Reload*.
+- In the installed app, share files, pictures, links or text from other apps into Gooseboard (Android), pick a board, and they land in the middle of it. Long-press the app icon for *New board*.
 
 ## How it works
 - **Peer to peer.** Board data is a [Yjs](https://yjs.dev) document synced over WebRTC between everyone on the board (full mesh) and saved in each browser's IndexedDB. Your board list and profile live in `localStorage`.
 - **No server.** Peers find each other through public Nostr relays and WebTorrent trackers, used at the same time, so any one of them being down is fine. Every handshake is encrypted with the board id, so relays see only ciphertext and people without the link can't join. There is no TURN relay, so very strict NATs may fail to connect.
 - **Private links.** A board lives at `/#/board/<12-char id>`, and that id is the key, so share links only with people you want on the board.
 - **Voice notes** run [transformers.js](https://huggingface.co/docs/transformers.js) in a Web Worker, with weights from Hugging Face's `onnx-community/whisper-tiny` kept in the browser's Cache API. Silero VAD ([vad-web](https://github.com/ricky0123/vad)) runs on the page from an audio worklet; its model and ONNX Runtime's wasm are bundled under `/vad/`, so no CDN is involved. Each utterance the VAD ends is transcribed in turn and appended to the note as a paragraph; known Whisper hallucinations ("thanks for watching", `[BLANK_AUDIO]` and the like) are dropped.
+- **Offline app.** One service worker (`public/stream-sw.js`) streams media, precaches the build (the build writes its file list and a content hash into it) and receives the share target. Voice notes' wasm and models still download when first used.
 - **Files** never enter the shared document. Their bytes go over the same data channels in chunks, with backpressure and resume, and are checked against a SHA-256 content hash. Chromium remembers shared files across reloads. Firefox asks the owner to re-pick them when someone needs one.
 
 ## Develop

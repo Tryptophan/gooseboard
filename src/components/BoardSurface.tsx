@@ -9,6 +9,7 @@ import { downsample, pointsBounds, strokePath } from '../lib/stroke'
 import { lastPointerType, LONG_PRESS_MS, SLOP, useCoarse } from '../lib/touch'
 import { normalizeUrl } from '../lib/url'
 import { addDropItems, pastedItems, pickFiles, readDrop } from '../model/actions'
+import { takeShare } from '../lib/share'
 import type { ExportedItem } from '../model/board'
 import { jsonToFragment } from '../model/noteSchema'
 import { DEFAULT_SIZE, FOLDER_COLORS, NOTE_COLORS, type FileItem, type Item, type Presence, type StrokeItem } from '../model/types'
@@ -962,6 +963,29 @@ export function BoardSurface() {
     },
     [store, dispatch, placeItem],
   )
+
+  // something shared into the installed app (#/share sent it here): placed like a paste, mid-view
+  useEffect(() => {
+    const sh = takeShare(session.id)
+    if (!sh) return
+    // a frame on, once the camera knows the board's size
+    requestAnimationFrame(async () => {
+      const at = camApi.viewCenter()
+      const ids = sh.files.length ? await addDropItems(session, pastedItems(sh.files), at, null, { avoidOverlap: true }) : []
+      dispatch({ type: 'select', ids })
+      // a page shared as "Title https://…" is just its link
+      const m = /(https?:\/\/\S+)\s*$/.exec(sh.text)
+      const link = sh.url || (m && sh.text.length - m[1].length <= 200 ? m[1] : '')
+      const text = link || [sh.title, sh.text].filter(Boolean).join('\n')
+      if (!text) return
+      if (!ids.length) return pasteText(text, at)
+      // the link or note goes just below the files
+      const all = store.getSnapshot().all
+      const bottom = Math.max(...ids.map((id) => (all.get(id)?.y ?? 0) + (all.get(id)?.h ?? 0)))
+      const h = link ? linkBox({ x: 0, y: 0, w: 0, h: 0 }, link).h : DEFAULT_SIZE.note.h
+      pasteText(text, { x: at.x, y: bottom + 24 + h / 2 })
+    })
+  }, [session, store, camApi, dispatch, pasteText])
 
   // ---- keyboard + clipboard ----
   useEffect(() => {

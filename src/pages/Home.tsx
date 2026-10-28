@@ -8,6 +8,8 @@ import { watchPresence } from '../net/presence'
 import { AvatarStack, Goose, useBudget } from '../components/Avatars'
 import { confirmDialog, copyDialog, promptDialog } from '../components/Dialog'
 import { Icon } from '../components/Icons'
+import { install } from '../components/Install'
+import { useInstallWay } from '../net/pwa'
 import { useThemeToggle } from '../state/ui'
 import s from './Home.module.css'
 
@@ -51,6 +53,7 @@ function useBoardPresence(boards: BoardEntry[], onRenamed: () => void) {
 export default function Home() {
   const nav = useNavigate()
   const theme = useThemeToggle()
+  const installWay = useInstallWay()
 
   // the logo matches the title block's height (on phones, just the title's: the tagline wraps below)
   const headText = useRef<HTMLDivElement>(null)
@@ -116,6 +119,11 @@ export default function Home() {
           <h1>Gooseboard</h1>
           <p>A simple collaborative decentralized workspace. Notes, drawings, files and folders, shared live between browsers. No accounts or cloud.</p>
         </div>
+        {installWay !== 'none' && (
+          <button className={s.theme} onClick={() => install(installWay)} title="Install Gooseboard as an app">
+            <Icon name="download" size={18} />
+          </button>
+        )}
         <button className={s.theme} onClick={theme.toggle} title={theme.dark ? 'Switch to light theme' : 'Switch to dark theme'}>
           <Icon name={theme.dark ? 'moon' : 'sun'} size={18} />
         </button>
