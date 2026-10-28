@@ -2,7 +2,7 @@ import { SMALL_FILE } from '../config'
 
 /**
  * How big a file this browser copies in automatically from the people on a board (per browser,
- * in localStorage). Bigger ones stay put until someone opens, downloads or syncs one.
+ * in localStorage). Bigger ones stay put until someone opens, downloads, or syncs one.
  */
 const KEY = 'gooseboard:autoSyncMax'
 const listeners = new Set<() => void>()
@@ -10,13 +10,16 @@ const listeners = new Set<() => void>()
 let max = (() => {
   try {
     const n = Number(localStorage.getItem(KEY))
-    return Number.isFinite(n) && n >= SMALL_FILE ? n : SMALL_FILE
+    // Infinity: no limit
+    return !Number.isNaN(n) && n >= SMALL_FILE ? n : SMALL_FILE
   } catch {
     return SMALL_FILE
   }
 })()
 
-export const AUTO_SYNC_CHOICES = [SMALL_FILE, 10 * 1024 * 1024, 50 * 1024 * 1024, 200 * 1024 * 1024, 500 * 1024 * 1024]
+const MB = 1024 * 1024
+const GB = 1024 * MB
+export const AUTO_SYNC_CHOICES = [SMALL_FILE, 50 * MB, 500 * MB, 5 * GB, Infinity]
 
 export const getAutoSyncMax = () => max
 export const subscribeAutoSync = (l: () => void) => {

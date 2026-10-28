@@ -29,7 +29,7 @@ A simple collaborative decentralized workspace for notes, drawings, files and fo
 
 **Files without uploads**
 - Files stay on the owner's computer and stream straight to whoever opens them.
-- Small files (up to 2 MB, or more if you choose so in Goosey's *Settings*) are copied into everyone's browser automatically. Bigger ones are fetched on demand, or press a file's sync button to keep a copy in your browser without saving it to disk. Anyone who has a copy can serve it, so a file stays available when its owner goes offline.
+- Small files (up to 2 MB, or up to 50 MB, 500 MB, 5 GB, or no limit if you choose so in Goosey's *Settings*) are copied into everyone's browser automatically. Bigger ones are fetched on demand, or press a file's sync button to keep a copy in your browser without saving it to disk. Anyone who has a copy can serve it, so a file stays available when its owner goes offline.
 - When nobody online has a file, its card says so and its preview and download buttons are greyed out until someone with it comes back.
 - Every card shows whether a file is synced and how many people online have it. Downloads are hash-verified.
 

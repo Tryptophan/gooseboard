@@ -237,13 +237,13 @@ function AutoSync() {
     <>
       <b className={s.sub}>Syncing</b>
       <label className={s.field}>
-        <span>Keep copies of files up to</span>
+        <span>Largest file to keep a copy of</span>
         <select value={max} onChange={(e) => setAutoSyncMax(Number(e.target.value))}>
           {[...new Set([...AUTO_SYNC_CHOICES, max])]
             .sort((a, b) => a - b)
             .map((n) => (
               <option key={n} value={n}>
-                {formatSize(n)}
+                {n === Infinity ? 'Unlimited' : formatSize(n)}
               </option>
             ))}
         </select>
