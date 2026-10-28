@@ -56,6 +56,9 @@ function create(id: string): Session {
     for (const it of all) {
       if ((it.type === 'file' || (it.type === 'folder' && it.mode === 'disk')) && it.owner === profile.id && it.key) void sources.probe(it.key)
     }
+    // an empty board is one this browser hasn't heard yet (a first visit, or cleared data), not one emptied
+    // by edits: peers will fill it in, so keep every copy
+    if (!all.length) return
     // the undo history died with the last visit: drop copies of files this board no longer has
     const hashes = new Set(all.flatMap((it) => (it.type === 'file' && it.hash ? [it.hash] : [])))
     const folders = new Set(all.flatMap((it) => (it.type === 'folder' && it.key ? [it.key] : [])))
