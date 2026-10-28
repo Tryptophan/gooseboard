@@ -10,6 +10,12 @@
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
     <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+    <script>
+      // Firefox for Android turns a maskable icon into a full-bleed shortcut icon that crashes the Pixel launcher (Android 17)
+      // while it draws the "Add to home screen" preview, and it uses none of the share target, shortcuts or link handling:
+      // it gets a plain manifest without them
+      if (/Firefox\//.test(navigator.userAgent)) document.querySelector('link[rel=manifest]').href = '%BASE_URL%manifest-firefox.webmanifest'
+    </script>
     <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)" />
 
