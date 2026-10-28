@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ROOM_PREFIX } from '../config'
 import { newBoardId, parseBoardRef } from '../lib/ids'
@@ -58,13 +58,16 @@ export default function Home() {
   // the logo matches the title block's height (on phones, just the title's: the tagline wraps below)
   const headText = useRef<HTMLDivElement>(null)
   const [logo, setLogo] = useState(44)
-  useEffect(() => {
+  // measured before the first paint, or the page draws with a guess and then jumps
+  useLayoutEffect(() => {
     const el = headText.current
     if (!el) return
-    const ro = new ResizeObserver(() => {
+    const fit = () => {
       const h1 = el.querySelector('h1')!
       setLogo(Math.round(matchMedia('(max-width: 560px)').matches ? h1.offsetHeight : el.offsetHeight))
-    })
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
