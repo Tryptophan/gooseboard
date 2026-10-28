@@ -17,7 +17,6 @@
 .head { transform-origin: 31px 64px; transition: transform 0.45s cubic-bezier(0.3, 1.4, 0.5, 1); }
 .neck { animation: bob 3.2s ease-in-out infinite; }
 .goose:hover .neck { animation-duration: 1.4s; }
-.open .head { transform: rotate(-8deg) !important; }
 .hop .art { animation: hop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); }
 
 @keyframes blink { 0%, 94%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }

@@ -35,41 +35,59 @@ export function Goosey() {
 }
 
 function Character({ open }: { open: boolean }) {
+  const { store } = useSession()
   const ref = useRef<HTMLButtonElement>(null)
   const [look, setLook] = useState(0)
   const [hop, setHop] = useState(false)
+  const glanceRef = useRef<(force?: boolean) => void>(() => {})
 
-  // now and then, glance toward the pointer
+  // glance toward the pointer when something happens (an edit, yours or a peer's, or someone
+  // joining), then rest a random while; always tilting back (left), never forward
   useEffect(() => {
     const move = (e: PointerEvent) => {
       pointer.x = e.clientX
       pointer.y = e.clientY
     }
     window.addEventListener('pointermove', move, { passive: true })
-    let t: ReturnType<typeof setTimeout>
-    const tick = () => {
+    let t: ReturnType<typeof setTimeout> | undefined
+    let restUntil = 0
+    const glance = (force = false) => {
+      const now = Date.now()
+      if (!force && now < restUntil) return
+      restUntil = now + 6000 + Math.random() * 14000
       const r = ref.current?.getBoundingClientRect()
-      if (r && pointer.x >= 0) {
-        // head pivot sits near the top right of the button; tilt toward the pointer, clamped
-        const deg = (Math.atan2(pointer.y - (r.top + r.height * 0.25), pointer.x - (r.left + r.width * 0.65)) * 180) / Math.PI
-        setLook(Math.max(-18, Math.min(18, deg * 0.4)))
-        t = setTimeout(() => {
-          setLook(0)
-          t = setTimeout(tick, 4000 + Math.random() * 5000)
-        }, 1600)
-      } else t = setTimeout(tick, 4000)
+      // head pivot sits near the top right of the button; tilt toward the pointer, clamped
+      const deg = r && pointer.x >= 0 ? (Math.atan2(pointer.y - (r.top + r.height * 0.25), pointer.x - (r.left + r.width * 0.65)) * 180) / Math.PI : -30
+      setLook(Math.max(-18, Math.min(-6, deg * 0.4)))
+      clearTimeout(t)
+      t = setTimeout(() => setLook(0), 1600)
     }
-    t = setTimeout(tick, 3000)
+    glanceRef.current = glance
+
+    // the board's own arrival from disk isn't an action
+    let live = false
+    store.onLoaded(() => (live = true))
+    const onEdit = () => live && glance()
+    store.items.observeDeep(onEdit)
+    const onPeers = ({ added }: { added: number[] }) => added.some((id) => id !== store.awareness.clientID) && glance()
+    store.awareness.on('change', onPeers)
     return () => {
       window.removeEventListener('pointermove', move)
+      store.items.unobserveDeep(onEdit)
+      store.awareness.off('change', onPeers)
       clearTimeout(t)
     }
-  }, [])
+  }, [store])
+
+  // opening the menu always gets a glance, rested or not
+  useEffect(() => {
+    if (open) glanceRef.current(true)
+  }, [open])
 
   return (
     <button
       ref={ref}
-      className={`${s.goose} ${hop ? s.hop : ''} ${open ? s.open : ''}`}
+      className={`${s.goose} ${hop ? s.hop : ''}`}
       aria-label="Goosey: settings and help"
       aria-expanded={open}
       onClick={() => {
@@ -79,7 +97,8 @@ function Character({ open }: { open: boolean }) {
       onAnimationEnd={(e) => e.animationName.includes('hop') && setHop(false)}
       data-goosey-toggle
     >
-      <GooseyArt look={look} />
+      {/* with the menu open he keeps a slight tilt back */}
+      <GooseyArt look={look || (open ? -8 : 0)} />
     </button>
   )
 }
