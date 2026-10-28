@@ -44,6 +44,8 @@ export abstract class Transport {
   constructor(private onStatus: () => void) {}
 
   abstract endpoints(): Endpoint[]
+  /** reconnects every relay/tracker now (see Wire.kick) */
+  abstract resume(): void
   protected abstract join(topic: string): void
   protected abstract leave(topic: string): void
   /** sends one batch (a JSON-serialisable array) to everyone else on the topic */
@@ -102,6 +104,7 @@ export class Wire {
   open = false
   private ws: WebSocket | null = null
   private tries = 0
+  private retryTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     readonly url: string,
@@ -136,7 +139,28 @@ export class Wire {
   }
 
   private retry() {
-    setTimeout(() => this.connect(), Math.min(60_000, 2_000 * 2 ** this.tries++))
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null
+      this.connect()
+    }, Math.min(60_000, 2_000 * 2 ** this.tries++))
+  }
+
+  /** Drops the socket (it may be dead while still claiming to be open) and dials again now, skipping any backoff. */
+  kick() {
+    if (this.retryTimer) clearTimeout(this.retryTimer)
+    this.retryTimer = null
+    this.tries = 0
+    const ws = this.ws
+    if (ws) {
+      ws.onopen = ws.onmessage = ws.onclose = null
+      ws.close()
+      this.ws = null
+    }
+    if (this.open) {
+      this.open = false
+      this.on.close()
+    }
+    this.connect()
   }
 
   send(msg: unknown) {

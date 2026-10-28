@@ -36,7 +36,18 @@ export function fixGlare(conn: any, provider: any) {
  */
 export function dropIfStuck(conn: any) {
   if (conn.__stuckTimer) return
+  for (const c of live) if (c.closed) live.delete(c)
+  live.add(conn)
   conn.__stuckTimer = setTimeout(() => {
     if (!conn.connected && !conn.closed) conn.peer?.destroy()
   }, 30_000)
+}
+
+/** Every peer connection seen by dropIfStuck (board and presence rooms), for dropAll. */
+const live = new Set<any>()
+
+/** Destroys every peer connection: y-webrtc forgets those peers and re-announces, so both sides dial afresh. */
+export function dropAll() {
+  live.forEach((c) => c.closed || c.peer?.destroy())
+  live.clear()
 }

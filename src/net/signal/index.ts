@@ -1,5 +1,7 @@
 import { NOSTR_RELAYS, TORRENT_TRACKERS } from '../../config'
+import { COARSE } from '../../lib/touch'
 import { NativeWebSocket, type Endpoint, type Sink, type Transport } from './core'
+import { dropAll } from './glare'
 import { NostrSignal } from './nostr'
 import { TrackerSignal } from './torrent'
 
@@ -104,11 +106,37 @@ class SignalSocket implements Sink {
   }
 }
 
+/**
+ * Mobile browsers suspend a backgrounded page: relay sockets and peer connections die, but often
+ * still look open when the page returns, and a relay that failed meanwhile may sit in a minute of
+ * backoff. So after a long enough absence, rebuild everything at once. Phones and tablets only: a
+ * desktop tab keeps its connections in the background, and tearing them down there would cost a
+ * needless blip every time someone switches tabs.
+ */
+const RESUME_AFTER_MS = 10_000
+function watchResume() {
+  if (!matchMedia(COARSE).matches) return
+  let hiddenAt = document.hidden ? Date.now() : 0
+  const back = () => {
+    if (document.hidden || !hiddenAt) return
+    const away = Date.now() - hiddenAt
+    hiddenAt = 0
+    if (away < RESUME_AFTER_MS) return
+    dropAll()
+    cache.forEach((t) => t.resume())
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) hiddenAt ||= Date.now()
+    else back()
+  })
+}
+
 let installed = false
 /** Routes `p2p-signal://` sockets to our transports; every other WebSocket is untouched. */
 export function installSignaling() {
   if (installed) return
   installed = true
+  watchResume()
   setInterval(() => sockets.forEach((s) => s.reannounce()), REANNOUNCE_MS)
   const Patched = function (url: string | URL, protocols?: string | string[]) {
     const u = String(url)

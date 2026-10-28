@@ -42,6 +42,10 @@ export class TrackerSignal extends Transport {
     return this.wires.map((w) => ({ url: w.url, open: w.open }))
   }
 
+  resume() {
+    this.wires.forEach((w) => w.kick())
+  }
+
   private infoHash(topic: string) {
     let h = this.hashes.get(topic)
     if (!h) {

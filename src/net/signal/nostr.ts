@@ -48,6 +48,10 @@ export class NostrSignal extends Transport {
     return this.wires.map((w) => ({ url: w.url, open: w.open }))
   }
 
+  resume() {
+    this.wires.forEach((w) => w.kick())
+  }
+
   private tag(topic: string) {
     let t = this.tags.get(topic)
     if (!t) {
