@@ -1,7 +1,7 @@
 import type { MicVAD } from '@ricky0123/vad-web'
 import * as Y from 'yjs'
 import type { Vec } from '../lib/geometry'
-import { toast } from '../lib/toast'
+import { isStaleChunk, toast } from '../lib/toast'
 import type { BoardStore } from '../model/board'
 import { engine } from './engine'
 import { whisperSpec, type ModelSpec } from './models'
@@ -129,6 +129,7 @@ class Voice {
       if (seq !== this.seq) return
       this.set({ phase: 'idle' })
       const denied = e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'SecurityError')
+      if (isStaleChunk(e)) return toast('Gooseboard has been updated: reload to use voice notes', { label: 'Reload', run: () => location.reload() })
       toast(denied ? 'Gooseboard needs the microphone for voice notes' : `Couldn’t start the microphone: ${e instanceof Error ? e.message : String(e)}`)
       return
     }

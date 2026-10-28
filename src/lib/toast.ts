@@ -17,3 +17,10 @@ export function toast(text: string, action?: ToastMsg['action']) {
   const t = { id: seq++, text, action }
   listeners.forEach((l) => l(t))
 }
+
+/**
+ * True when a lazy chunk failed to load because the site was redeployed under this open page
+ * (its hashed file is gone): Chrome, Firefox and Safari word it differently.
+ */
+export const isStaleChunk = (e: unknown) =>
+  e instanceof TypeError && /dynamically imported module|importing a module script failed/i.test(e.message)
