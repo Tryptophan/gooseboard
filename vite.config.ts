@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -70,10 +71,21 @@ function precache(): Plugin {
   }
 }
 
+/** The commit being built, with "+" when the tree has changes, for the diagnostics in Help. */
+function commit(): string {
+  try {
+    const head = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
+    return execSync('git status --porcelain', { encoding: 'utf8' }).trim() ? `${head}+` : head
+  } catch {
+    return 'unknown'
+  }
+}
+
 // GitHub Pages on the custom domain https://gooseboard.io/
 // Override with VITE_BASE (e.g. "/gooseboard/" for a <user>.github.io project site).
 export default defineConfig(({ command, isPreview }) => ({
   base: command === 'build' || isPreview ? (process.env.VITE_BASE ?? '/') : '/',
   plugins: [react(), vadAssets(), precache()],
   build: { target: 'es2022', sourcemap: true },
+  define: { __COMMIT__: JSON.stringify(commit()) },
 }))

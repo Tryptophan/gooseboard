@@ -1,3 +1,5 @@
+import { diag } from './diag'
+
 export interface ToastMsg {
   id: number
   text: string
@@ -14,6 +16,7 @@ export const onToast = (l: L) => {
 }
 
 export function toast(text: string, action?: ToastMsg['action']) {
+  diag('toast', text)
   const t = { id: seq++, text, action }
   listeners.forEach((l) => l(t))
 }

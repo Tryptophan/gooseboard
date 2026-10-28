@@ -54,7 +54,9 @@
   background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
   background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%; background-size: 5px 5px; background-repeat: no-repeat;
 }
+.dump { display: block; width: 100%; height: 160px; margin-top: 8px; box-sizing: border-box; font-family: var(--mono); font-size: 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); resize: vertical; }
 .install { flex: none; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; cursor: pointer; }
+.install:disabled { opacity: 0.6; cursor: default; }
 .segmented { display: flex; gap: 2px; padding: 3px; margin: 8px 0; border: 1px solid var(--border); border-radius: 10px; }
 .menu .stores li { font-family: inherit; font-size: 12.5px; padding: 2px 4px; }
 .stores li > span:first-child { flex: 1; }

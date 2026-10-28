@@ -15,7 +15,7 @@ A simple collaborative decentralized workspace for notes, drawings, files and fo
 - Select, move, resize, rotate, duplicate, reorder, copy/cut/paste between boards, and undo/redo everything.
 
 **Goosey**
-- Goosey, the big goose in the bottom-left corner, holds the menus: *Settings* (theme, storage used by the speech model and cached files, with buttons to clear them), *Transfers* (every file moving to or from you, streamed videos included, with progress, cancel and errors) and *Help* (getting started, and keyboard shortcuts, or touch gestures on phones and tablets).
+- Goosey, the big goose in the bottom-left corner, holds the menus: *Settings* (theme, storage used by the speech model and cached files, with buttons to clear them), *Transfers* (every file moving to or from you, streamed videos included, with progress, cancel and errors) and *Help* (getting started, keyboard shortcuts or touch gestures on phones and tablets, and diagnostics: a voice self-test and a *Copy diagnostics* button that puts a JSON report of this browser, this device, and the app's recent activity on the clipboard, with names, ids, and anything people wrote left out).
 - While files are moving, a progress ring sits on his shoulder, and closing the tab asks first.
 
 **Voice notes on your device**

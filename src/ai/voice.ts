@@ -1,6 +1,7 @@
-import type { MicVAD } from '@ricky0123/vad-web'
+import type { MicVAD, RealTimeVADOptions } from '@ricky0123/vad-web'
 import * as Y from 'yjs'
 import type { Vec } from '../lib/geometry'
+import { diag, diagSection } from '../lib/diag'
 import { isStaleChunk, toast } from '../lib/toast'
 import type { BoardStore } from '../model/board'
 import { engine } from './engine'
@@ -12,6 +13,29 @@ const NOTE = { w: 300, h: 260, color: '#e3d4ff' }
 const RUN_TIMEOUT_MS = 60_000
 /** Silero's model, its audio worklet and ONNX Runtime's wasm, copied into the build by vite.config.ts */
 const ASSETS = `${import.meta.env.BASE_URL}vad/`
+
+/** Silero VAD's settings, shared with the self-test: a little stricter than the defaults, so breath and keyboard noise stay out */
+export const VAD_OPTIONS: Partial<RealTimeVADOptions> = {
+  model: 'v5',
+  baseAssetPath: ASSETS,
+  onnxWASMBasePath: ASSETS,
+  positiveSpeechThreshold: 0.6,
+  negativeSpeechThreshold: 0.4,
+  minSpeechMs: 400,
+  redemptionMs: 700,
+  preSpeechPadMs: 300,
+  submitUserSpeechOnPause: true,
+}
+
+/** The mic as vad-web asks for it, with what the browser actually gave logged. */
+export async function micStream(label: string): Promise<MediaStream> {
+  const t0 = performance.now()
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, autoGainControl: true, noiseSuppression: true } })
+  const track = stream.getAudioTracks()[0]
+  const { deviceId: _d, groupId: _g, ...settings } = track?.getSettings() ?? {}
+  diag(label, 'mic open', { ms: Math.round(performance.now() - t0), label: track?.label ? 'named' : 'unnamed', settings })
+  return stream
+}
 
 /**
  * What Whisper says over noise and breath that VAD let through: captions from its training data.
@@ -55,6 +79,10 @@ interface Recording {
   queue: Promise<void>
   pending: number
   live: boolean
+  /** VAD frames since the last heartbeat in the log, and the highest speech probability among them */
+  frames: number
+  peak: number
+  beat: number
 }
 
 /**
@@ -95,27 +123,30 @@ class Voice {
     if (this.state.phase !== 'idle') return
     const seq = ++this.seq
     this.set({ phase: 'starting' })
+    const t0 = performance.now()
     let rec: Recording
     try {
       const spec = await whisperSpec()
+      diag('voice', 'start', { spec: spec.id, into: !!into })
       await engine.load(spec)
       const { MicVAD } = await import('@ricky0123/vad-web')
       if (seq !== this.seq) return
-      rec = { store, spec, note: '', existing: false, vad: null, language: 'auto', wrote: 0, queue: Promise.resolve(), pending: 0, live: true }
+      rec = { store, spec, note: '', existing: false, vad: null, language: 'auto', wrote: 0, queue: Promise.resolve(), pending: 0, live: true, frames: 0, peak: 0, beat: performance.now() }
       rec.vad = await MicVAD.new({
-        model: 'v5',
-        baseAssetPath: ASSETS,
-        onnxWASMBasePath: ASSETS,
-        // a little stricter than the defaults: breath and keyboard noise stay out
-        positiveSpeechThreshold: 0.6,
-        negativeSpeechThreshold: 0.4,
-        minSpeechMs: 400,
-        redemptionMs: 700,
-        preSpeechPadMs: 300,
-        submitUserSpeechOnPause: true,
-        onSpeechRealStart: () => this.speaking(rec, true),
-        onVADMisfire: () => this.speaking(rec, false),
+        ...VAD_OPTIONS,
+        getStream: () => micStream('voice'),
+        onFrameProcessed: (p) => this.frame(rec, p.isSpeech),
+        onSpeechStart: () => diag('voice', 'vad speech start'),
+        onSpeechRealStart: () => {
+          diag('voice', 'vad speech confirmed')
+          this.speaking(rec, true)
+        },
+        onVADMisfire: () => {
+          diag('voice', 'vad misfire')
+          this.speaking(rec, false)
+        },
         onSpeechEnd: (audio) => {
+          diag('voice', 'vad speech end', { seconds: +(audio.length / SAMPLE_RATE).toFixed(2), queued: rec.pending })
           // marked waiting before speaking ends, so the dots don't flicker off in between
           this.waitingFor.set(rec.note, ++rec.pending)
           this.speaking(rec, false)
@@ -127,7 +158,9 @@ class Voice {
         },
       })
       if (seq !== this.seq) return void rec.vad.destroy()
+      diag('voice', 'listening', { ms: Math.round(performance.now() - t0), errored: rec.vad.errored })
     } catch (e) {
+      diag('voice', 'start failed', { ms: Math.round(performance.now() - t0), error: e })
       if (seq !== this.seq) return
       this.set({ phase: 'idle' })
       const denied = e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'SecurityError')
@@ -156,6 +189,7 @@ class Voice {
     this.rec = null
     this.set({ phase: 'idle' })
     if (!rec) return
+    diag('voice', 'stop', { wrote: rec.wrote, pending: rec.pending })
     rec.live = false
     // pausing hands over the utterance in progress (submitUserSpeechOnPause)
     await rec.vad?.pause().catch(() => {})
@@ -165,6 +199,18 @@ class Voice {
       rec.store.undo.stopCapturing()
       rec.store.remove([rec.note])
     }
+  }
+
+  /** Every VAD frame (about 30 a second): a heartbeat in the log every 10 s shows the mic is still flowing. */
+  private frame(rec: Recording, p: number) {
+    rec.frames++
+    rec.peak = Math.max(rec.peak, p)
+    const now = performance.now()
+    if (now - rec.beat < 10_000) return
+    diag('voice', 'vad frames', { frames: rec.frames, seconds: Math.round((now - rec.beat) / 1000), peak: +rec.peak.toFixed(2) })
+    rec.frames = 0
+    rec.peak = 0
+    rec.beat = now
   }
 
   private speaking(rec: Recording, speaking: boolean) {
@@ -186,6 +232,7 @@ class Voice {
       // a second or more of speech is enough to tell the language
       if (rec.language === 'auto' && out.language && audio.length >= SAMPLE_RATE) rec.language = out.language
       text = clean(out.text)
+      diag('voice', 'heard', { language: out.language, chars: out.text?.length ?? 0, kept: text.length })
     } catch (e) {
       if (rec.live) toast(`Couldn’t transcribe that: ${e instanceof Error ? e.message : String(e)}`)
       return
@@ -209,3 +256,5 @@ class Voice {
 }
 
 export const voice = new Voice()
+
+diagSection('voice', () => ({ state: voice.getState().phase, engine: engine.status() }))

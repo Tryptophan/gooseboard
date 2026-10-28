@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { engine } from '../ai/engine'
-import { cachedModelBytes, deleteAllModels } from '../ai/models'
+import { cachedModelBytes, deleteAllModels, formatMB } from '../ai/models'
+import { getSelfTest, runSelfTest, selfTestDownloadMB, subscribeSelfTest } from '../ai/selftest'
 import { AUTO_SYNC_CHOICES, getAutoSyncMax, setAutoSyncMax, subscribeAutoSync } from '../lib/autoSync'
 import { voice } from '../ai/voice'
+import { collectDiag } from '../lib/diag'
 import { formatSize } from '../lib/files'
 import type { ThemePref } from '../lib/storage'
+import { toast } from '../lib/toast'
 import { useCoarse } from '../lib/touch'
 import { useInstallWay } from '../net/pwa'
 import { getGoosey, openMenu, subscribeGoosey, type Tab } from '../state/goosey'
@@ -363,6 +366,67 @@ function Help() {
           </div>
         ))}
       </dl>
+      <Diagnostics />
+    </>
+  )
+}
+
+/** Puts `text` on the clipboard; `text` may still be coming, so the copy keeps the click's permission. */
+async function copy(text: Promise<string>): Promise<boolean> {
+  try {
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+      await navigator.clipboard.write([new ClipboardItem({ 'text/plain': text.then((t) => new Blob([t], { type: 'text/plain' })) })])
+      return true
+    }
+  } catch {
+    /* some browsers don't take a promise: try plain text */
+  }
+  try {
+    await navigator.clipboard.writeText(await text)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** For bug reports: a voice self-test, and everything the app knows about itself, copied as JSON. */
+function Diagnostics() {
+  const test = useSyncExternalStore(subscribeSelfTest, getSelfTest)
+  // shown to select by hand when the clipboard refuses
+  const [manual, setManual] = useState<string | null>(null)
+
+  const runTest = async () => {
+    const mb = await selfTestDownloadMB()
+    const ok = await confirmDialog({
+      title: 'Test voice notes?',
+      message: `Transcribes an 11 s sample on each speech engine this browser has, then listens to your mic for 5 s. Downloads about ${formatMB(mb)}.`,
+      ok: 'Run test',
+    })
+    if (ok) void runSelfTest()
+  }
+  const copyAll = async () => {
+    const text = collectDiag()
+    if (await copy(text)) toast('Diagnostics copied')
+    else setManual(await text)
+  }
+
+  return (
+    <>
+      <b className={s.sub}>Diagnostics</b>
+      <p className={c.muted}>If something isn’t working, copy these and send them along. They describe this browser, this device, and what Gooseboard has been doing, with names, ids, and everything you wrote left out.</p>
+      <div className={s.field}>
+        <span className={c.muted}>{test.text || 'Voice notes self-test'}</span>
+        <button className={s.install} disabled={test.running} onClick={() => void runTest()}>
+          {test.running ? 'Testing…' : 'Test voice'}
+        </button>
+      </div>
+      <div className={s.field}>
+        <span />
+        <button className={s.install} onClick={() => void copyAll()}>
+          Copy diagnostics
+        </button>
+      </div>
+      {manual && <textarea className={s.dump} readOnly value={manual} onFocus={(e) => e.currentTarget.select()} autoFocus />}
     </>
   )
 }

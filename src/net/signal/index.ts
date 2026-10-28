@@ -1,4 +1,5 @@
 import { NOSTR_RELAYS, TORRENT_TRACKERS } from '../../config'
+import { diag, diagSection } from '../../lib/diag'
 import { COARSE } from '../../lib/touch'
 import { NativeWebSocket, type Endpoint, type Sink, type Transport } from './core'
 import { dropAll } from './glare'
@@ -19,6 +20,7 @@ const SCHEME = 'p2p-signal://'
 
 const listeners = new Set<() => void>()
 const statusChanged = () => {
+  diag('signal', 'status', signalStatus().map((t) => `${t.kind} ${t.endpoints.filter((e) => e.open).length}/${t.endpoints.length}`))
   listeners.forEach((l) => l())
   reannounceSoon()
 }
@@ -151,6 +153,8 @@ export function installSignaling() {
 export function signalStatus(): { kind: string; endpoints: Endpoint[] }[] {
   return Object.keys(makers).map((kind) => ({ kind, endpoints: cache.get(kind)?.endpoints() ?? [] }))
 }
+
+diagSection('signaling', signalStatus)
 
 export function onSignalStatus(l: () => void) {
   listeners.add(l)

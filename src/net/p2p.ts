@@ -1,4 +1,5 @@
 import type { WebrtcProvider } from 'y-webrtc'
+import { tag } from '../lib/diag'
 import { FRAME_SIZE, HIGH_WATER, LOW_WATER } from '../config'
 import { mimeOf } from '../lib/files'
 import type { Profile } from '../lib/storage'
@@ -225,6 +226,24 @@ export class P2P {
     const s = new Set<string>()
     this.links.forEach((l) => l.userId && l.conn.connected && s.add(l.userId))
     return s
+  }
+
+  /** Each link's state, with ids tagged, for diagnostics. */
+  diagInfo() {
+    const links = [...this.links.values()].map((l) => {
+      const pc: RTCPeerConnection | undefined = l.conn.peer?._pc
+      return {
+        peer: tag(l.peerId),
+        user: l.userId ? tag(l.userId) : null,
+        connected: !!l.conn.connected,
+        hello: !!l.userId,
+        connectionState: pc?.connectionState,
+        iceConnectionState: pc?.iceConnectionState,
+        signalingState: pc?.signalingState,
+        have: l.have?.size ?? 0,
+      }
+    })
+    return { links, requests: this.reqs.size, serving: this.serving.size, waiting: this.waiting.length, pendingRelinks: this.pending.size }
   }
 
   get peerCount() {

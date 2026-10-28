@@ -1,5 +1,6 @@
 import { BoardStore } from '../model/board'
-import { getProfile, type Profile } from '../lib/storage'
+import { diagSecrets, diagSection, tag } from '../lib/diag'
+import { getBoards, getProfile, type Profile } from '../lib/storage'
 import { FileService } from './fileService'
 import { Mirror } from './mirror'
 import { P2P } from './p2p'
@@ -92,6 +93,46 @@ export function acquireSession(id: string): Session {
   e.refs++
   return e.session
 }
+
+diagSection('boards', () => ({
+  saved: getBoards().length,
+  open: [...live.values()].map(({ session: s, refs }) => {
+    const items = [...s.store.getSnapshot().all.values()]
+    const types: Record<string, number> = {}
+    for (const it of items) types[it.type] = (types[it.type] ?? 0) + 1
+    return {
+      board: tag(s.id),
+      refs,
+      items: types,
+      people: s.store.awareness.getStates().size,
+      p2p: s.p2p.diagInfo(),
+      mirror: s.mirror.stats(),
+    }
+  }),
+}))
+
+/** ids, names, links, and the like never leave in a diagnostics dump */
+diagSecrets(function* () {
+  const me = getProfile()
+  yield me.id
+  yield me.name
+  for (const b of getBoards()) yield* [b.id, b.name, b.pendingName]
+  for (const { session: s } of live.values()) {
+    yield s.id
+    yield s.store.name
+    for (const it of s.store.getSnapshot().all.values()) {
+      yield it.id
+      for (const k of ['name', 'url', 'key', 'hash', 'owner', 'title'] as const) {
+        const v = (it as unknown as Record<string, unknown>)[k]
+        if (typeof v === 'string') yield v
+      }
+    }
+    for (const st of s.store.awareness.getStates().values()) {
+      const u = (st as { user?: { id?: string; name?: string } }).user
+      if (u) yield* [u.id, u.name]
+    }
+  }
+})
 
 export function releaseSession(id: string) {
   const e = live.get(id)
