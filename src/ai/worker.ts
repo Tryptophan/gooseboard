@@ -17,6 +17,8 @@ export type FromWorker =
   | { t: 'ok'; id: number; result?: unknown }
   | { t: 'err'; id: number; message: string }
   | { t: 'log'; id: number; msg: string; data?: unknown }
+  /** a run got past a stage (features, encoder, language, a token): the page's watchdog starts over */
+  | { t: 'alive'; id: number; stage: string; ms: number }
 
 let loaded: { specId: string; pipe: Promise<any> } | null = null
 
@@ -73,18 +75,58 @@ function get(spec: ModelSpec, onProgress?: (loaded: number, total: number) => vo
 }
 
 /**
- * Whisper's own language guess: one decoder step after <|startoftranscript|>, read off the
- * language tokens. transformers.js would otherwise assume English for multilingual models.
+ * One utterance (up to 30 s), with the language detected. The encoder is most of the work, so
+ * it runs once, for both Whisper's language guess and the transcript; the pipeline would run it
+ * again. `alive` is told as each stage, and each token, is done.
  */
-async function detectLanguage(pipe: any, audio: Float32Array): Promise<string | undefined> {
-  const gc = pipe.model.generation_config
-  if (!gc?.is_multilingual || !gc.lang_to_id) return undefined
+async function transcribe(pipe: any, audio: Float32Array, task: unknown, alive: (stage: string, ms: number) => void) {
+  const model = pipe.model
+  const { input_features, encoder_outputs, language } = await encode(pipe, audio, alive)
+  // generate() keeps only the inputs named here: let the encoder output through, so it isn't run again
+  if (!model.forward_params.includes('encoder_outputs')) model.forward_params = [...model.forward_params, 'encoder_outputs']
+  const t0 = performance.now()
+  let tokens = 0
+  const out = await model.generate({
+    inputs: input_features,
+    encoder_outputs,
+    language,
+    task,
+    num_frames: Math.floor(audio.length / pipe.processor.feature_extractor.config.hop_length),
+    streamer: { put: () => alive('token', ++tokens), end: () => {} },
+  })
+  const text: string = pipe.tokenizer.batch_decode(out, { skip_special_tokens: true })[0] ?? ''
+  log('decoded', { ms: ms(t0), tokens })
+  return { text, language }
+}
+
+/** Features and encoder output for up to 30 s of audio, and the language Whisper hears in it. */
+async function encode(pipe: any, audio: Float32Array, alive: (stage: string, ms: number) => void) {
+  const model = pipe.model
+  const gc = model.generation_config
   let t0 = performance.now()
   const { input_features } = await pipe.processor(audio)
-  log('features', { ms: ms(t0), dims: input_features?.dims })
+  alive('features', ms(t0))
   t0 = performance.now()
+  const { encoder_outputs } = await model._prepare_encoder_decoder_kwargs_for_generation({
+    inputs_tensor: input_features,
+    model_inputs: { input_features },
+    model_input_name: 'input_features',
+    generation_config: gc,
+  })
+  alive('encoder', ms(t0))
+  // transformers.js would otherwise assume English for multilingual models
+  t0 = performance.now()
+  const language = gc?.is_multilingual && gc.lang_to_id ? await detectLanguage(model, input_features, encoder_outputs) : undefined
+  alive('language', ms(t0))
+  return { input_features, encoder_outputs, language }
+}
+
+/** Whisper's own language guess: one decoder step after <|startoftranscript|>, read off the language tokens. */
+async function detectLanguage(model: any, input_features: unknown, encoder_outputs: unknown): Promise<string | undefined> {
+  const gc = model.generation_config
+  const t0 = performance.now()
   const start = new Tensor('int64', BigInt64Array.from([BigInt(gc.decoder_start_token_id)]), [1, 1])
-  const { logits } = await pipe.model({ input_features, decoder_input_ids: start })
+  const { logits } = await model({ input_features, encoder_outputs, decoder_input_ids: start })
   const row: ArrayLike<number> = logits.data ?? (await logits.getData())
   let best: string | undefined
   let score = -Infinity
@@ -106,13 +148,20 @@ self.onmessage = async (e: MessageEvent<ToWorker>) => {
       post({ t: 'ok', id: m.id })
     } else {
       const pipe = await get(m.spec)
-      const options = { ...m.options }
-      // language: 'auto' asks for detection first; the result says what was heard
-      if (options.language === 'auto') options.language = await detectLanguage(pipe, m.input)
+      const alive = (stage: string, n: number) => post({ t: 'alive', id: m.id, stage, ms: n })
       const t0 = performance.now()
-      const result = await pipe(m.input, options)
+      // language: 'auto' asks for detection too; the result says what was heard. Longer audio is
+      // chunked by the pipeline.
+      let result
+      if (m.options.language === 'auto' && !m.options.chunk_length_s) result = await transcribe(pipe, m.input, m.options.task, alive)
+      else {
+        const options: Record<string, unknown> = { ...m.options, streamer: { put: () => alive('token', 0), end: () => {} } }
+        // longer than one window: the language from the first 30 s
+        if (options.language === 'auto') options.language = (await encode(pipe, m.input.subarray(0, 30 * 16_000), alive)).language
+        result = { ...(await pipe(m.input, options)), language: options.language }
+      }
       log('transcribed', { ms: ms(t0), seconds: m.input.length / 16_000, chars: String(result?.text ?? '').length })
-      post({ t: 'ok', id: m.id, result: { ...result, language: options.language } })
+      post({ t: 'ok', id: m.id, result })
     }
   } catch (err) {
     log('failed', { op: m.t, error: err instanceof Error ? `${err.name}: ${err.message}\n${err.stack ?? ''}`.slice(0, 1500) : String(err) })

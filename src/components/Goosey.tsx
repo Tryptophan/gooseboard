@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { engine } from '../ai/engine'
-import { cachedModelBytes, deleteAllModels, formatMB } from '../ai/models'
-import { getSelfTest, runSelfTest, selfTestDownloadMB, subscribeSelfTest } from '../ai/selftest'
+import { cachedModelBytes, deleteAllModels } from '../ai/models'
 import { AUTO_SYNC_CHOICES, getAutoSyncMax, setAutoSyncMax, subscribeAutoSync } from '../lib/autoSync'
 import { voice } from '../ai/voice'
 import { collectDiag } from '../lib/diag'
@@ -347,7 +346,6 @@ function Help() {
   const coarse = useCoarse()
   return (
     <>
-      <p>A simple collaborative decentralized workspace for notes, drawings, files and folders, shared live between browsers. Share the link, and everyone edits together. Files stay on their owner’s device and stream on demand.</p>
       <b className={s.sub}>Getting started</b>
       <ul className={s.tips}>
         <li>{coarse ? 'Add files, folders and links from the toolbar.' : 'Drop or paste files, folders, images and links anywhere.'}</li>
@@ -389,21 +387,11 @@ async function copy(text: Promise<string>): Promise<boolean> {
   }
 }
 
-/** For bug reports: a voice self-test, and everything the app knows about itself, copied as JSON. */
+/** For bug reports: everything the app knows about itself, and what it's been doing, copied as JSON. */
 function Diagnostics() {
-  const test = useSyncExternalStore(subscribeSelfTest, getSelfTest)
   // shown to select by hand when the clipboard refuses
   const [manual, setManual] = useState<string | null>(null)
 
-  const runTest = async () => {
-    const mb = await selfTestDownloadMB()
-    const ok = await confirmDialog({
-      title: 'Test voice notes?',
-      message: `Transcribes an 11 s sample on each speech engine this browser has, then listens to your mic for 5 s. Downloads about ${formatMB(mb)}.`,
-      ok: 'Run test',
-    })
-    if (ok) void runSelfTest()
-  }
   const copyAll = async () => {
     const text = collectDiag()
     if (await copy(text)) toast('Diagnostics copied')
@@ -414,12 +402,6 @@ function Diagnostics() {
     <>
       <b className={s.sub}>Diagnostics</b>
       <p className={c.muted}>If something isn’t working, copy these and send them along. They describe this browser, this device, and what Gooseboard has been doing, with names, ids, and everything you wrote left out.</p>
-      <div className={s.field}>
-        <span className={c.muted}>{test.text || 'Voice notes self-test'}</span>
-        <button className={s.install} disabled={test.running} onClick={() => void runTest()}>
-          {test.running ? 'Testing…' : 'Test voice'}
-        </button>
-      </div>
       <div className={s.field}>
         <span />
         <button className={s.install} onClick={() => void copyAll()}>

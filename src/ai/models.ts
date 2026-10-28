@@ -22,7 +22,7 @@ export const CACHE_NAME = 'transformers-cache'
 
 /** ONNX file sizes in MB from the hub (checked 2026-10-27); config and tokenizer add ~3 MB. */
 const base = { task: 'automatic-speech-recognition' as const, repo: 'onnx-community/whisper-tiny' }
-export const WHISPER: Record<Device, ModelSpec> = {
+const WHISPER: Record<Device, ModelSpec> = {
   webgpu: { ...base, id: 'whisper-tiny-webgpu', device: 'webgpu', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' }, mb: 33 + 87 + 3 },
   wasm: { ...base, id: 'whisper-tiny-wasm', device: 'wasm', dtype: { encoder_model: 'q8', decoder_model_merged: 'q8' }, mb: 10 + 31 + 3 },
 }

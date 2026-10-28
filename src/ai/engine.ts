@@ -6,12 +6,21 @@ interface Pending {
   resolve(v: unknown): void
   reject(e: Error): void
   onProgress?(loaded: number, total: number): void
+  onAlive?(stage: string, ms: number): void
 }
+
+/**
+ * A run is given up as hung when the worker goes this long without finishing a stage. Slow
+ * devices get longer: up to 25 times the time this one takes to compute features (plain
+ * JavaScript, so it tracks the device's speed), and three times its slowest stage so far.
+ */
+const QUIET_MS = 60_000
+const PER_FEATURES_MS = 25
 
 type Msg = ToWorker extends infer M ? (M extends ToWorker ? Omit<M, 'id'> : never) : never
 
-/** Main-thread handle on a model worker. `engine` is the one every board in this tab shares. */
-export class Engine {
+/** Main-thread handle on the model worker, shared by every board in this tab. */
+class Engine {
   constructor(private label = 'engine') {}
 
   private worker: Worker | null = null
@@ -20,7 +29,10 @@ export class Engine {
   /** the model the worker holds */
   private ready: { id: string; p: Promise<void> } | null = null
 
-  private send(msg: Msg, transfer: Transferable[] = [], onProgress?: Pending['onProgress']): Promise<unknown> {
+  /** the longest a stage of a run has taken on this device */
+  private slowest = 0
+
+  private send(msg: Msg, transfer: Transferable[] = [], onProgress?: Pending['onProgress'], onAlive?: Pending['onAlive']): Promise<unknown> {
     if (!this.worker) {
       diag(this.label, 'worker start')
       const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
@@ -31,6 +43,7 @@ export class Engine {
         const p = this.pending.get(m.id)
         if (!p) return
         if (m.t === 'progress') return p.onProgress?.(m.loaded, m.total)
+        if (m.t === 'alive') return p.onAlive?.(m.stage, m.ms)
         this.pending.delete(m.id)
         if (m.t === 'ok') p.resolve(m.result)
         else p.reject(new Error(m.message))
@@ -46,7 +59,7 @@ export class Engine {
     }
     const id = ++this.seq
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, onProgress })
+      this.pending.set(id, { resolve, reject, onProgress, onAlive })
       this.worker!.postMessage({ ...msg, id } as ToWorker, transfer)
     })
   }
@@ -75,34 +88,42 @@ export class Engine {
     return p
   }
 
-  /** With `timeoutMs`, a run that hasn't answered by then fails, and the worker is restarted. */
-  async run<T>(spec: ModelSpec, input: Float32Array, options: Record<string, unknown>, timeoutMs?: number): Promise<T> {
+  /** Fails, and restarts the worker, if the run stops making progress (see QUIET_MS). */
+  async run<T>(spec: ModelSpec, input: Float32Array, options: Record<string, unknown>): Promise<T> {
     await this.load(spec)
     const t0 = performance.now()
     const n = input.length
-    diag(this.label, 'run', { spec: spec.id, samples: n, timeoutMs })
-    const out = this.send({ t: 'run', spec, input, options }, [input.buffer]).then(
-      (r) => {
-        diag(this.label, 'ran', { samples: n, ms: Math.round(performance.now() - t0) })
-        return r
-      },
-      (e) => {
-        diag(this.label, 'run failed', { samples: n, ms: Math.round(performance.now() - t0), error: e })
-        throw e
-      },
-    )
-    if (!timeoutMs) return (await out) as T
+    let quiet = Math.max(QUIET_MS, 3 * this.slowest)
     let timer: ReturnType<typeof setTimeout> | undefined
-    const late = new Promise<never>((_, reject) => {
+    let reject!: (e: Error) => void
+    const hung = new Promise<never>((_, r) => (reject = r))
+    const watch = () => {
+      clearTimeout(timer)
       timer = setTimeout(() => {
-        // rejected before reset() rejects `out` with "stopped", so this is the error the caller sees
-        diag(this.label, 'run timed out', { samples: n, timeoutMs })
+        diag(this.label, 'run timed out', { samples: n, quietMs: quiet, ms: Math.round(performance.now() - t0) })
+        // rejected before reset() rejects the run with "stopped", so this is the error the caller sees
         reject(new Error('the speech model stopped responding'))
         this.reset()
-      }, timeoutMs)
-    })
+      }, quiet)
+    }
+    const alive = (stage: string, ms: number) => {
+      if (stage !== 'token') {
+        this.slowest = Math.max(this.slowest, ms)
+        diag(this.label, `run ${stage}`, { ms })
+      }
+      if (stage === 'features') quiet = Math.max(quiet, PER_FEATURES_MS * ms)
+      watch()
+    }
+    diag(this.label, 'run', { spec: spec.id, samples: n, quietMs: quiet })
+    watch()
+    const out = this.send({ t: 'run', spec, input, options }, [input.buffer], undefined, alive)
     try {
-      return (await Promise.race([out, late])) as T
+      const r = await Promise.race([out, hung])
+      diag(this.label, 'ran', { samples: n, ms: Math.round(performance.now() - t0) })
+      return r as T
+    } catch (e) {
+      diag(this.label, 'run failed', { samples: n, ms: Math.round(performance.now() - t0), error: e })
+      throw e
     } finally {
       clearTimeout(timer)
     }
