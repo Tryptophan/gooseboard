@@ -78,7 +78,7 @@ export const DEFAULT_SIZE: Record<ItemType, { w: number; h: number }> = {
 
 export const NOTE_COLORS = ['#fff3a3', '#ffd0a6', '#ffc2cf', '#cde8ff', '#c9f0c8', '#e3d4ff']
 export const FOLDER_COLORS = ['#f2c14e', '#7aa7ff', '#7bd3a0', '#f59fb7', '#b9a1ff', '#9aa5b1']
-export const PEN_COLORS = ['#1f2328', '#e5484d', '#f76b15', '#d9a400', '#30a46c', '#3e63dd', '#8e4ec6', '#ffffff']
+export const PEN_COLORS = ['#e5484d', '#f76b15', '#d9a400', '#30a46c', '#3e63dd', '#8e4ec6', '#ffffff', '#1f2328']
 
 /** Awareness payload for a connected person. */
 export interface PresenceUser {
