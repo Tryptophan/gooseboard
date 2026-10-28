@@ -11,6 +11,8 @@ img.bare { background: none; }
 .note { position: absolute; left: 8px; bottom: 8px; padding: 3px 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 12px; pointer-events: none; }
 
 .live { pointer-events: auto; }
+/* matches VIDEO_CONTROLS_PX in BoardSurface */
+.grab { position: absolute; inset: 0 0 48px 0; }
 
 /* the sync pill (styled by Items.module.css), only on hover */
 .syncSlot { position: absolute; left: 0; top: 0; opacity: 0; transition: opacity 0.12s; will-change: opacity; }

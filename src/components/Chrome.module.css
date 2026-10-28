@@ -32,7 +32,6 @@
 .iconBtn { width: 34px; height: 34px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 9px; cursor: pointer; }
 .iconBtn:hover { background: var(--hover); }
 .shareBtn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: var(--accent); color: #fff; font-weight: 600; padding: 7px 14px; border-radius: 10px; cursor: pointer; }
-:global(:root[data-theme='dark']) .shareBtn { color: #0b1020; }
 .shareBtn:hover { filter: brightness(1.08); }
 
 .popover { position: fixed; z-index: 40; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 14px; width: 320px; max-width: calc(100vw - 24px); font-size: 13px; }

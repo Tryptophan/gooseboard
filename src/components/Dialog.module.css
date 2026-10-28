@@ -12,4 +12,3 @@
 .buttons .primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
 .buttons .danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 .buttons .danger:hover { background: var(--danger); filter: brightness(0.9); }
-:global(:root[data-theme='dark']) .buttons .primary { color: #0b1020; }

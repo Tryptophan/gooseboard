@@ -188,6 +188,8 @@ function InlineVideo({ item, poster }: { item: FileItem; poster?: string }) {
           }}
         />
       )}
+      {/* Firefox's controls swallow every pointer event on the video: cover all but their strip so it still drags */}
+      {url && !err && !paused && <div className={s.grab} />}
       {(err || wait || !url) && <div className={s.note}>{err ? `Can’t play: ${err}` : (wait ?? 'Loading…')}</div>}
       {url && !err && paused && (
         <button className={s.bigPlay} title="Play" onClick={() => void ref.current?.play().catch(() => {})}>
