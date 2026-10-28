@@ -8,6 +8,8 @@ import { whisperSpec, type ModelSpec } from './models'
 
 const SAMPLE_RATE = 16_000
 const NOTE = { w: 300, h: 260, color: '#e3d4ff' }
+/** How long Whisper gets for an utterance (plus 4 s per second of it) before it's given up as hung */
+const RUN_TIMEOUT_MS = 60_000
 /** Silero's model, its audio worklet and ONNX Runtime's wasm, copied into the build by vite.config.ts */
 const ASSETS = `${import.meta.env.BASE_URL}vad/`
 
@@ -178,11 +180,9 @@ class Voice {
     }
     let text: string
     try {
-      const out = await engine.run<{ text: string; language?: string }>(rec.spec, audio, {
-        task: 'transcribe',
-        language: rec.language,
-        ...(audio.length > 30 * SAMPLE_RATE && { chunk_length_s: 30, stride_length_s: 5 }),
-      })
+      const timeout = RUN_TIMEOUT_MS + (audio.length / SAMPLE_RATE) * 4_000
+      const options = { task: 'transcribe', language: rec.language, ...(audio.length > 30 * SAMPLE_RATE && { chunk_length_s: 30, stride_length_s: 5 }) }
+      const out = await engine.run<{ text: string; language?: string }>(rec.spec, audio, options, timeout)
       // a second or more of speech is enough to tell the language
       if (rec.language === 'auto' && out.language && audio.length >= SAMPLE_RATE) rec.language = out.language
       text = clean(out.text)

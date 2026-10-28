@@ -46,9 +46,24 @@ class Engine {
     return p
   }
 
-  async run<T>(spec: ModelSpec, input: Float32Array, options: Record<string, unknown>): Promise<T> {
+  /** With `timeoutMs`, a run that hasn't answered by then fails, and the worker is restarted. */
+  async run<T>(spec: ModelSpec, input: Float32Array, options: Record<string, unknown>, timeoutMs?: number): Promise<T> {
     await this.load(spec)
-    return (await this.send({ t: 'run', spec, input, options }, [input.buffer])) as T
+    const out = this.send({ t: 'run', spec, input, options }, [input.buffer])
+    if (!timeoutMs) return (await out) as T
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const late = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        // rejected before reset() rejects `out` with "stopped", so this is the error the caller sees
+        reject(new Error('the speech model stopped responding'))
+        this.reset()
+      }, timeoutMs)
+    })
+    try {
+      return (await Promise.race([out, late])) as T
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   /** Frees the model and GPU memory, and cancels a download in progress. */

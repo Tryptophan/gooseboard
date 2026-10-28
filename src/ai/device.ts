@@ -18,3 +18,13 @@ async function probe(): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * Phones and tablets. Their GPUs (Mali on a Pixel 7a, for one) can load Whisper on WebGPU and
+ * then never finish transcribing, so they run it on the CPU.
+ */
+export function isMobile(): boolean {
+  if ((navigator as any).userAgentData?.mobile === true) return true
+  // iPads ask for the desktop site: a Mac with a touchscreen is one
+  return /Android|iPhone|iPad|Mobi/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
+}

@@ -20,7 +20,7 @@ A simple collaborative decentralized workspace for notes, drawings, files and fo
 
 **Voice notes on your device**
 - Speech recognition runs entirely in your browser: [Silero VAD](https://github.com/snakers4/silero-vad) picks the speech out of the mic, so pauses and background noise never reach the recogniser (which is what makes it invent words), then Whisper Tiny turns each sentence into text. Your voice never leaves the device.
-- Whisper Tiny runs on WebGPU where the browser has it, or on the CPU. The first press asks before it downloads (about 45 MB on the CPU, 120 MB for the GPU) from Hugging Face; once it's cached the mic just starts. Language is detected from what you say first.
+- Whisper Tiny runs on WebGPU where a computer's browser has it, and on the CPU otherwise, including on phones and tablets (whose GPUs can hang partway through). The first press asks before it downloads (about 45 MB on the CPU, 120 MB for the GPU) from Hugging Face; once it's cached the mic just starts. Language is detected from what you say first.
 
 **Together**
 - Live cursors and names for everyone on the board. Click someone's avatar to follow their view.

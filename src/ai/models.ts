@@ -1,4 +1,4 @@
-import { hasWebGPU } from './device'
+import { hasWebGPU, isMobile } from './device'
 
 /**
  * The speech model: Whisper Tiny from the Hugging Face hub (onnx-community). transformers.js
@@ -23,7 +23,7 @@ export const CACHE_NAME = 'transformers-cache'
 /** ONNX file sizes in MB from the hub (checked 2026-10-27); config and tokenizer add ~3 MB. */
 export async function whisperSpec(): Promise<ModelSpec> {
   const base = { task: 'automatic-speech-recognition' as const, repo: 'onnx-community/whisper-tiny' }
-  return (await hasWebGPU())
+  return !isMobile() && (await hasWebGPU())
     ? { ...base, id: 'whisper-tiny-webgpu', device: 'webgpu', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' }, mb: 33 + 87 + 3 }
     : { ...base, id: 'whisper-tiny-wasm', device: 'wasm', dtype: { encoder_model: 'q8', decoder_model_merged: 'q8' }, mb: 10 + 31 + 3 }
 }
