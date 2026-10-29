@@ -46,8 +46,11 @@ export function dropIfStuck(conn: any) {
 /** Every peer connection seen by dropIfStuck (board and presence rooms), for dropAll. */
 const live = new Set<any>()
 
-/** Destroys every peer connection: y-webrtc forgets those peers and re-announces, so both sides dial afresh. */
-export function dropAll() {
-  live.forEach((c) => c.closed || c.peer?.destroy())
-  live.clear()
+/**
+ * Destroys every peer connection (but those in `keep`): y-webrtc forgets those peers and
+ * re-announces, so both sides dial afresh.
+ */
+export function dropAll(keep?: Set<unknown>) {
+  live.forEach((c) => c.closed || keep?.has(c) || c.peer?.destroy())
+  for (const c of live) if (c.closed || !keep?.has(c)) live.delete(c)
 }

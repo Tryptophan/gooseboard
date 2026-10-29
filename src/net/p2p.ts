@@ -6,6 +6,8 @@ import type { Profile } from '../lib/storage'
 import type { Mirror } from './mirror'
 import type { PartialCache } from './partial'
 import { dropIfStuck, fixGlare } from './signal/glare'
+import { mesh } from './signal'
+import type { MeshChannel, MeshMsg } from './signal/mesh'
 import type { LocalSources } from './sources'
 import { Gone, Lanes, loadThumb, saveThumb, thumbKey } from './thumbCache'
 import { makePreview, makeThumb } from './thumbs'
@@ -19,10 +21,12 @@ import type { TransferStore } from './transfers'
  * Peers that hold a copy (see Mirror) advertise its content hash with a `have` message, so a
  * request carrying `hash` can be served by the owner or any holder, failing over mid-stream.
  * Complete, verified entries of the transfer cache (see PartialCache) are advertised and served the same way.
+ * Each link is also a hop for signaling (see signal/mesh), in K_SIG frames older peers ignore.
  */
 const MAGIC = 0x67
 const K_JSON = 1
 const K_DATA = 2
+const K_SIG = 3
 const DATA_HEADER = 14 // magic, kind, u32 request id, f64 offset
 const PAYLOAD = FRAME_SIZE - DATA_HEADER
 const BLOCK = 256 * 1024
@@ -79,6 +83,9 @@ interface Link {
   name?: string
   have?: Set<string>
   aliases?: Record<string, string>
+  /** this link as a signaling hop, while it's open */
+  hop?: MeshChannel
+  unhop?: () => void
 }
 
 interface Resolved extends Meta {
@@ -142,6 +149,15 @@ export const encodeJSON = (msg: Wire): Uint8Array => {
   const out = new Uint8Array(body.length + 2)
   out[0] = MAGIC
   out[1] = K_JSON
+  out.set(body, 2)
+  return out
+}
+
+const encodeSig = (m: MeshMsg): Uint8Array => {
+  const body = enc.encode(JSON.stringify(m))
+  const out = new Uint8Array(body.length + 2)
+  out[0] = MAGIC
+  out[1] = K_SIG
   out.set(body, 2)
   return out
 }
@@ -223,6 +239,7 @@ export class P2P {
     dropIfStuck(conn)
     const cur = this.links.get(peerId)
     if (cur && cur.conn === conn) return
+    cur?.unhop?.()
     const link: Link = { peerId, conn }
     this.links.set(peerId, link)
     this.attach(link)
@@ -306,6 +323,7 @@ export class P2P {
     clearInterval(this.timer)
     if (this.haveTimer) clearTimeout(this.haveTimer)
     this.unsubMirror()
+    this.links.forEach((l) => l.unhop?.())
     this.reqs.forEach((ar) => this.fail(ar, new Error('closed')))
     this.listeners.clear()
   }
@@ -371,6 +389,9 @@ export class P2P {
     const hello = () => {
       void this.sendFrame(link, encodeJSON({ t: 'hello', user: this.self.id, name: this.self.name })).catch(() => {})
       this.sendHave(link)
+      if (link.hop || link.conn.closed) return
+      link.hop = { conn: link.conn, user: link.userId, send: (m) => void this.sendFrame(link, encodeSig(m)).catch(() => {}) }
+      link.unhop = mesh.add(link.hop)
     }
     if (link.conn.connected) hello()
     else peer.once('connect', hello)
@@ -408,6 +429,7 @@ export class P2P {
   }
 
   private linkDown(l: Link) {
+    l.unhop?.()
     for (const [k, st] of this.serving) if (k.startsWith(l.peerId + ':')) st.cancelled = true
     this.waiting = this.waiting.filter((w) => w.link !== l)
   }
@@ -448,7 +470,7 @@ export class P2P {
       else if (buf[1] === K_DATA) {
         const { id, offset, bytes } = decodeData(buf)
         this.onData(link, id, offset, bytes)
-      }
+      } else if (buf[1] === K_SIG && link.hop) mesh.receive(link.hop, JSON.parse(dec.decode(buf.subarray(2))) as MeshMsg)
     } catch (e) {
       console.warn('[gooseboard] bad frame', e)
     }
@@ -459,6 +481,10 @@ export class P2P {
       case 'hello':
         link.userId = msg.user
         link.name = msg.name
+        if (link.hop) {
+          link.hop.user = msg.user
+          mesh.identified()
+        }
         this.emit()
         break
       case 'have':

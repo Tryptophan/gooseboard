@@ -8,6 +8,7 @@ import { useUi, useUiDispatch } from '../state/ui'
 import { shareDialog } from './Dialog'
 import { fitAvatars, Goose, MoreChip, useBudget } from './Avatars'
 import { Icon } from './Icons'
+import { QrLinkDialog } from './QrLink'
 import s from './Chrome.module.css'
 
 /** Closes a popover on a press anywhere outside it (and outside its toggle), or on Escape. */
@@ -82,6 +83,7 @@ export function TopBar({ boardId }: { boardId: string }) {
   const [showConn, setShowConn] = useState(false)
   const [showMe, setShowMe] = useState(false)
   const [showMore, setShowMore] = useState(false)
+  const [linking, setLinking] = useState(false)
   const connRef = useRef<HTMLDivElement>(null)
   const moreRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef(document.body)
@@ -126,6 +128,7 @@ export function TopBar({ boardId }: { boardId: string }) {
   useDismiss(showMore, () => setShowMore(false), moreRef, '[data-more-toggle]')
 
   const up = conn.servers.filter((x) => x.connected).length
+  const relaysUp = conn.servers.filter((x) => x.connected && x.kind !== 'mesh').length
   const others = peers.filter((p) => !p.isSelf).length
   const me = peers.find((p) => p.isSelf)
 
@@ -188,21 +191,31 @@ export function TopBar({ boardId }: { boardId: string }) {
         <div className={`${s.popover} ${s.connPop}`} data-nodrag ref={connRef}>
           <b>Connection</b>
           <p>
-            Board data goes <u>directly between browsers</u> (WebRTC mesh). Public Nostr relays and WebTorrent trackers only introduce peers, and only ever see encrypted handshakes.
+            Board data goes <u>directly between browsers</u> (WebRTC mesh). Public Nostr relays, WebTorrent trackers, and peers you’re already linked to only introduce peers, and only ever see encrypted handshakes.
           </p>
           <ul>
             {conn.servers.map((x) => (
               <li key={x.url}>
-                <span className={`${s.led} ${x.connected ? s.ledOk : s.ledBad}`} /> {x.url.replace('wss://', '').replace(/\/announce$/, '')} <span className={s.muted}>{x.kind === 'nostr' ? 'Nostr' : 'tracker'}</span>
+                <span className={`${s.led} ${x.connected ? s.ledOk : s.ledBad}`} /> {x.url.replace('wss://', '').replace(/\/announce$/, '')} <span className={s.muted}>{x.kind === 'nostr' ? 'Nostr' : x.kind === 'mesh' ? 'via peers' : 'tracker'}</span>
               </li>
             ))}
           </ul>
           <p className={s.muted}>
-            {up === 0 ? 'No relay or tracker reachable: edits are saved locally and will sync when one is. ' : ''}
+            {relaysUp === 0 ? 'No relay or tracker reachable: edits are saved locally and sync when one is, or with peers linked by QR code. ' : ''}
             {conn.links} direct link{conn.links === 1 ? '' : 's'} · STUN only (no TURN relay)
           </p>
+          <button
+            className={s.connAction}
+            onClick={() => {
+              setShowConn(false)
+              setLinking(true)
+            }}
+          >
+            Add offline peer
+          </button>
         </div>
       )}
+      {linking && <QrLinkDialog board={{ id: boardId, name }} onClose={() => setLinking(false)} />}
 
       <div className={`${s.panelBar} ${s.topRight}`} data-nodrag>
         <div className={s.avatars}>

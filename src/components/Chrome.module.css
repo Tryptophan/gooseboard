@@ -43,6 +43,8 @@
 /* 8px under the top bars (12px down, 48px tall), and never past 16px from the bottom: longer ones scroll */
 .connPop, .mePop { --top: calc(68px + var(--sat)); top: var(--top); max-height: calc(100dvh - var(--top) - 16px - var(--sab)); overflow-y: auto; }
 .connPop { left: calc(12px + var(--sal)); }
+.connAction { width: 100%; margin-top: 6px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-weight: 600; cursor: pointer; }
+.connAction:hover { background: var(--hover); }
 .mePop { right: calc(12px + var(--sar)); width: 260px; }
 .muted { color: var(--muted); }
 .swatches { display: flex; flex-wrap: wrap; gap: 4px; }

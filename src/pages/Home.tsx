@@ -9,6 +9,7 @@ import { watchPresence } from '../net/presence'
 import { AvatarStack, Goose, useBudget } from '../components/Avatars'
 import { confirmDialog, copyDialog, promptDialog } from '../components/Dialog'
 import { Icon } from '../components/Icons'
+import { QrLinkDialog } from '../components/QrLink'
 import { Reminders } from '../components/Reminders'
 import { install } from '../components/Install'
 import { useInstallWay } from '../net/pwa'
@@ -78,6 +79,7 @@ export default function Home() {
   const [joinErr, setJoinErr] = useState(false)
   const [profile, setProfile] = useState({ ...getProfile() })
   const [copied, setCopied] = useState<string | null>(null)
+  const [linking, setLinking] = useState(false)
   const online = useBoardPresence(boards, () => setBoards(getBoards()))
 
   // marked as opened from here, so the board's back arrow goes back rather than stacking another Home
@@ -158,7 +160,11 @@ export default function Home() {
           />
           <button type="submit">Join</button>
         </form>
+        <button onClick={() => setLinking(true)} title="Join a board from a device on the same Wi-Fi or hotspot, with no internet, by scanning QR codes">
+          Join offline peer
+        </button>
       </section>
+      {linking && <QrLinkDialog onClose={() => setLinking(false)} />}
 
       <section>
         <h2>Your boards</h2>

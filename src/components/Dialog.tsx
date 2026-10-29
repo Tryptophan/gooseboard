@@ -51,11 +51,14 @@ export function shareDialog(title: string, url: string, copied: boolean, message
   return new Promise((done) => show({ kind: 'share', title, value: url, copied, message, done }))
 }
 
-/** `text` as a QR code: dark squares on white, with the quiet margin scanners need, whatever the theme. */
-function QrCode({ text }: { text: string }) {
+/**
+ * `text` as a QR code: dark squares on white, with the quiet margin scanners need, whatever the theme.
+ * Bytes go in byte mode as they are (qrcode-generator takes each char code's low byte).
+ */
+export function QrCode({ text, label = 'QR code of the link' }: { text: string | Uint8Array; label?: string }) {
   const { d, n } = useMemo(() => {
     const qr = qrcode(0, 'M')
-    qr.addData(text)
+    qr.addData(typeof text === 'string' ? text : String.fromCharCode(...text), 'Byte')
     qr.make()
     const n = qr.getModuleCount()
     let d = ''
@@ -63,7 +66,7 @@ function QrCode({ text }: { text: string }) {
     return { d, n: n + 8 }
   }, [text])
   return (
-    <svg className={s.qr} viewBox={`0 0 ${n} ${n}`} role="img" aria-label="QR code of the link" shapeRendering="crispEdges">
+    <svg className={s.qr} viewBox={`0 0 ${n} ${n}`} role="img" aria-label={label} shapeRendering="crispEdges">
       <rect width={n} height={n} fill="#fff" />
       <path d={d} fill="#000" />
     </svg>

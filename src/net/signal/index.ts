@@ -3,6 +3,7 @@ import { diag, diagSection } from '../../lib/diag'
 import { COARSE } from '../../lib/touch'
 import { NativeWebSocket, type Endpoint, type Sink, type Transport } from './core'
 import { dropAll } from './glare'
+import { MeshSignal } from './mesh'
 import { NostrSignal } from './nostr'
 import { TrackerSignal } from './torrent'
 
@@ -10,7 +11,9 @@ import { TrackerSignal } from './torrent'
  * Serverless signaling for y-webrtc. Its signaling protocol is plain topic pub/sub
  * (subscribe / publish / ping), so instead of a dedicated server we carry it over public
  * infrastructure that already relays between browsers: Nostr relays (ephemeral events) and
- * WebTorrent trackers (the opaque "offer" payload). y-webrtc opens `new WebSocket(url)`
+ * WebTorrent trackers (the opaque "offer" payload). A third transport floods it over the data
+ * channels already open to other browsers (./mesh), so peers introduce each other with no
+ * relay at all. y-webrtc opens `new WebSocket(url)`
  * through lib0; for our `p2p-signal://` URLs we hand it an in-page socket bound to one of
  * these transports. y-webrtc encrypts every signaling message with the room password (the
  * board id), so relays only ever see ciphertext under a hashed topic.
@@ -42,10 +45,14 @@ function reannounceSoon() {
   }, 1000)
 }
 
-const cache = new Map<string, Transport>()
+/** Signaling over open data channels: board links and QR bootstraps add themselves as hops. */
+export const mesh = new MeshSignal(() => statusChanged())
+
+const cache = new Map<string, Transport>([['mesh', mesh]])
 const makers: Record<string, () => Transport> = {
   nostr: () => new NostrSignal(NOSTR_RELAYS, statusChanged),
   torrent: () => new TrackerSignal(TORRENT_TRACKERS, statusChanged),
+  mesh: () => mesh,
 }
 function transport(kind: string): Transport | undefined {
   if (!makers[kind]) return undefined
@@ -124,8 +131,9 @@ function watchResume() {
     const away = Date.now() - hiddenAt
     hiddenAt = 0
     if (away < RESUME_AFTER_MS) return
-    dropAll()
     cache.forEach((t) => t.resume())
+    // links that still answer stay: with no internet they are the only way back to the others
+    void mesh.probe(2000).then(dropAll)
   }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) hiddenAt ||= Date.now()
