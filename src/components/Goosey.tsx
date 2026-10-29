@@ -362,14 +362,14 @@ function Storage() {
       <b className={s.sub}>Storage &amp; data</b>
       {usage !== null && <p>Gooseboard is using {formatSize(usage)} in this browser.</p>}
       <ul className={s.stores}>
-        <li>
+        <li title="Speech models downloaded to this browser for voice notes, so they work offline after the first time">
           <span>AI models</span>
           <span className={c.muted}>{models === null ? '…' : models ? formatSize(models) : 'none'}</span>
           <button title="Clear the AI model cache" disabled={!models} onClick={() => void clearModels()}>
             <Icon name="trash" size={13} />
           </button>
         </li>
-        <li>
+        <li title="Copies of other people’s files kept in this browser, so they open instantly and stay available when their owner is offline">
           <span>Synced files</span>
           <span className={c.muted}>{files.count ? `${files.count} · ${formatSize(files.bytes)}` : 'none'}</span>
           <button title="Forget synced copies of other people’s files" disabled={!files.count} onClick={() => void clearFiles()}>
