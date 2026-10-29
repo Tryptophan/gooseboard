@@ -12,6 +12,7 @@ import type { ThemePref } from '../lib/storage'
 import { toast } from '../lib/toast'
 import { useCoarse } from '../lib/touch'
 import { useInstallWay } from '../net/pwa'
+import { clearPictures, pictureStats } from '../net/pictureCache'
 import { clearThumbs, thumbStats } from '../net/thumbCache'
 import { getGoosey, openMenu, subscribeGoosey, type Tab } from '../state/goosey'
 import { useSession } from '../state/session'
@@ -322,11 +323,13 @@ function Storage() {
   const [usage, setUsage] = useState<number | null>(null)
   const [models, setModels] = useState<number | null>(null)
   const [thumbs, setThumbs] = useState<{ count: number; bytes: number } | null>(null)
+  const [pictures, setPictures] = useState<{ count: number; bytes: number } | null>(null)
   const refresh = async () => {
     const est = await navigator.storage?.estimate?.().catch(() => null)
     setUsage(est?.usage ?? null)
     setModels(await cachedModelBytes())
     setThumbs(await thumbStats())
+    setPictures(await pictureStats())
   }
   useEffect(() => {
     void refresh()
@@ -347,15 +350,12 @@ function Storage() {
     await mirror.clear()
     void refresh()
   }
-  const clearPieces = async () => {
-    if (!(await confirmDialog({ title: 'Clear the transfer cache?', message: 'Pieces of files fetched from other people (streamed videos, and downloads and syncs not yet finished) are removed. Synced files stay. Unfinished transfers start over.', ok: 'Clear', danger: true }))) return
-    await partial.clear()
+  const clearCache = async () => {
+    if (!(await confirmDialog({ title: 'Clear the cache?', message: 'Pieces of files fetched from other people (streamed videos, and downloads and syncs not yet finished), the pictures and thumbnails shown on boards, and the thumbnails of what you share are removed. Synced files stay. Unfinished transfers start over, and pictures are fetched or made again when needed.', ok: 'Clear', danger: true }))) return
+    await Promise.all([partial.clear(), clearPictures(), clearThumbs()])
     void refresh()
   }
-  const clearThumbnails = async () => {
-    await clearThumbs()
-    void refresh()
-  }
+  const cache = { count: pieces.count + (pictures?.count ?? 0) + (thumbs?.count ?? 0), bytes: pieces.bytes + (pictures?.bytes ?? 0) + (thumbs?.bytes ?? 0) }
 
   return (
     <>
@@ -376,17 +376,10 @@ function Storage() {
             <Icon name="trash" size={13} />
           </button>
         </li>
-        <li title="Pieces of files fetched from other people, kept (up to 2 GB) so transfers resume and videos replay offline">
-          <span>Transfer cache</span>
-          <span className={c.muted}>{pieces.count ? `${pieces.count} · ${formatSize(pieces.bytes)}` : 'none'}</span>
-          <button title="Clear the transfer cache" disabled={!pieces.count} onClick={() => void clearPieces()}>
-            <Icon name="trash" size={13} />
-          </button>
-        </li>
-        <li title="Thumbnails of the pictures and videos you share, made once so people can browse your folders quickly">
-          <span>Thumbnails</span>
-          <span className={c.muted}>{thumbs === null ? '…' : thumbs.count ? `${thumbs.count} · ${formatSize(thumbs.bytes)}` : 'none'}</span>
-          <button title="Clear the thumbnails (they're made again when needed)" disabled={!thumbs?.count} onClick={() => void clearThumbnails()}>
+        <li title="Pieces of files fetched from other people (up to 2 GB), the pictures shown on boards (up to 2 GB), and thumbnails of what you share (up to 256 MB), so transfers resume and boards load quickly and offline">
+          <span>Cache</span>
+          <span className={c.muted}>{pictures === null || thumbs === null ? '…' : cache.count ? formatSize(cache.bytes) : 'none'}</span>
+          <button title="Clear the cache" disabled={!cache.count} onClick={() => void clearCache()}>
             <Icon name="trash" size={13} />
           </button>
         </li>

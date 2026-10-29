@@ -1,4 +1,4 @@
-import { createStore, del, entries, get, set } from 'idb-keyval'
+import { clear, createStore, del, entries, get, set } from 'idb-keyval'
 
 /** Most the cache keeps on disk; the least recently used entries go first. */
 export const PICTURE_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024
@@ -16,6 +16,14 @@ try {
 } catch {
   /* no IndexedDB: nothing to clean up */
 }
+
+/** How many pictures are kept on disk, and their size. */
+export async function pictureStats(): Promise<{ count: number; bytes: number }> {
+  const all = await entries<string, Entry>(store).catch(() => [] as [string, Entry][])
+  return { count: all.length, bytes: all.reduce((n, [, e]) => n + e.blob.size, 0) }
+}
+
+export const clearPictures = () => clear(store).catch(() => {})
 
 /**
  * Pictures shown on the board, as object URLs. Thumbnails and previews share one cache.

@@ -9,12 +9,29 @@ const store = createStore('gooseboard-thumbs', 'thumbs')
 /** source key -> the boards it's shared on, so a board's load can drop thumbnails of what it no longer shares */
 const owners = createStore('gooseboard-thumb-boards', 'boards')
 
+/** Most the thumbnails keep on disk; the least recently used go first. */
+export const THUMB_CACHE_MAX_BYTES = 256 * 1024 * 1024
+
+/** `used` is 0 for thumbnails stored before the limit existed, which are the first to go. */
+interface Entry {
+  blob: Blob | null
+  used: number
+}
+const entryOf = (v: Entry | Blob | null | undefined): Entry | undefined =>
+  v === undefined ? undefined : v === null || v instanceof Blob ? { blob: v, used: 0 } : v
+
 export const thumbKey = (key: string, path: string, f: File) => `${key}\0${path}\0${f.size}:${f.lastModified}`
 
 /** The stored thumbnail, null if the file has none, undefined if it was never made. */
-export const loadThumb = (k: string): Promise<Blob | null | undefined> => get<Blob | null>(k, store).catch(() => undefined)
+export async function loadThumb(k: string): Promise<Blob | null | undefined> {
+  const e = entryOf(await get<Entry | Blob | null>(k, store).catch(() => undefined))
+  if (e) void set(k, { ...e, used: Date.now() } satisfies Entry, store).catch(() => {})
+  return e?.blob
+}
 export function saveThumb(k: string, b: Blob | null, board: string) {
-  void set(k, b, store).catch(() => {})
+  void set(k, { blob: b, used: Date.now() } satisfies Entry, store)
+    .then(() => pruneThumbs())
+    .catch(() => {})
   const key = k.slice(0, k.indexOf('\0'))
   void get<string[]>(key, owners)
     .then((bs = []) => (bs.includes(board) ? undefined : set(key, [...bs, board], owners)))
@@ -43,8 +60,31 @@ export async function dropThumbsFor(key: string) {
 
 /** How many thumbnails are kept, and their size. */
 export async function thumbStats(): Promise<{ count: number; bytes: number }> {
-  const all = await entries<string, Blob | null>(store).catch(() => [] as [string, Blob | null][])
-  return { count: all.length, bytes: all.reduce((n, [, b]) => n + (b?.size ?? 0), 0) }
+  const all = await entries<string, Entry | Blob | null>(store).catch(() => [] as [string, Entry | Blob | null][])
+  return { count: all.length, bytes: all.reduce((n, [, v]) => n + (entryOf(v)?.blob?.size ?? 0), 0) }
+}
+
+let pruning: Promise<void> | null = null
+/** Drops the least recently used thumbnails until the cache fits. Runs one at a time. */
+function pruneThumbs(): Promise<void> {
+  pruning ??= (async () => {
+    try {
+      const all = await entries<string, Entry | Blob | null>(store)
+      let total = all.reduce((n, [, v]) => n + (entryOf(v)?.blob?.size ?? 0), 0)
+      if (total <= THUMB_CACHE_MAX_BYTES) return
+      all.sort((a, b) => entryOf(a[1])!.used - entryOf(b[1])!.used)
+      for (const [k, v] of all) {
+        if (total <= THUMB_CACHE_MAX_BYTES) break
+        await del(k, store)
+        total -= entryOf(v)?.blob?.size ?? 0
+      }
+    } catch {
+      /* best effort */
+    } finally {
+      pruning = null
+    }
+  })()
+  return pruning
 }
 
 export const clearThumbs = () => Promise.all([clear(store), clear(owners)]).catch(() => {})
