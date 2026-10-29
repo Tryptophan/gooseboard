@@ -78,15 +78,17 @@ export default function Home() {
   const [copied, setCopied] = useState<string | null>(null)
   const online = useBoardPresence(boards, () => setBoards(getBoards()))
 
+  // marked as opened from here, so the board's back arrow goes back rather than stacking another Home
+  const openBoard = (id: string) => nav(`/board/${id}`, { state: { fromHome: true } })
   const create = () => {
     const id = newBoardId()
     touchBoard(id)
-    nav(`/board/${id}`)
+    openBoard(id)
   }
   const doJoin = () => {
     const id = parseBoardRef(join)
     if (!id) return setJoinErr(true)
-    nav(`/board/${id}`)
+    openBoard(id)
   }
   const remove = async (b: BoardEntry) => {
     const ok = await confirmDialog({
@@ -120,7 +122,7 @@ export default function Home() {
         <img src={`${import.meta.env.BASE_URL}favicon.svg`} width={logo} height={logo} alt="" />
         <div ref={headText}>
           <h1>Gooseboard</h1>
-          <p>A simple collaborative decentralized workspace. Notes, drawings, files and folders, shared live between browsers. No accounts or cloud.</p>
+          <p>A simple collaborative decentralized workspace. Notes, drawings, files, and folders, shared live between browsers. No accounts or cloud.</p>
         </div>
         {installWay !== 'none' && (
           <button className={s.theme} onClick={() => install(installWay)} title="Install Gooseboard as an app">
@@ -163,7 +165,7 @@ export default function Home() {
           <ul className={s.list}>
             {boards.map((b) => (
               <li key={b.id}>
-                <button className={s.open} onClick={() => nav(`/board/${b.id}`)}>
+                <button className={s.open} onClick={() => openBoard(b.id)}>
                   <span className={s.label}>
                     <b>{b.name || 'Untitled board'}</b>
                     <span>

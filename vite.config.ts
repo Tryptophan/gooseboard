@@ -7,7 +7,7 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
 /**
- * Voice notes' Silero VAD loads its model, audio worklet and ONNX Runtime's wasm at runtime:
+ * Voice notes' Silero VAD loads its model, audio worklet, and ONNX Runtime's wasm at runtime:
  * served from /vad/ in dev and copied there in the build, so no CDN is involved.
  */
 function vadAssets(): Plugin {

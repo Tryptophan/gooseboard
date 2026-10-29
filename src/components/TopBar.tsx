@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { renameBoardLocal, saveProfile, USER_COLORS } from '../lib/storage'
-import { toast } from '../lib/toast'
 import { signalStatus } from '../net/signal'
+import { afterMenuEntry } from '../state/goosey'
 import { usePeers, useSession } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
-import { copyDialog } from './Dialog'
+import { shareDialog } from './Dialog'
 import { fitAvatars, Goose, MoreChip, useBudget } from './Avatars'
 import { Icon } from './Icons'
 import s from './Chrome.module.css'
@@ -66,7 +66,11 @@ function useBoardName(boardId: string) {
   return name
 }
 
+let measurer: CanvasRenderingContext2D | null = null
+
 export function TopBar({ boardId }: { boardId: string }) {
+  const location = useLocation()
+  const nav = useNavigate()
   const session = useSession()
   const { store } = session
   const { peers: allPeers } = usePeers()
@@ -82,6 +86,23 @@ export function TopBar({ boardId }: { boardId: string }) {
   const moreRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef(document.body)
   const leftRef = useRef<HTMLDivElement>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
+  const shownName = (draft ?? name) || 'Untitled board'
+  // the name box as wide as its text, so the space either side of it matches
+  useLayoutEffect(() => {
+    const fit = () => {
+      const el = nameRef.current
+      if (!el) return
+      const cs = getComputedStyle(el)
+      const ctx = (measurer ??= document.createElement('canvas').getContext('2d'))
+      if (!ctx) return
+      ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
+      el.style.width = `${Math.ceil(ctx.measureText(shownName).width) + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + 2}px`
+    }
+    fit()
+    // again once the web font is in, which is wider than the fallback
+    void document.fonts?.ready.then(fit)
+  }, [shownName])
   const restRef = useRef<HTMLDivElement>(null)
   const meRef = useRef<HTMLDivElement>(null)
   const avatarBudget = useBudget(bodyRef, 1) - useBudget(leftRef, 1) - useBudget(restRef, 1) - 80
@@ -108,14 +129,17 @@ export function TopBar({ boardId }: { boardId: string }) {
   const others = peers.filter((p) => !p.isSelf).length
   const me = peers.find((p) => p.isSelf)
 
+  // the link, without whatever state the page's history carries
   const share = async () => {
-    const url = window.location.href
+    const url = `${window.location.origin}${window.location.pathname}#/board/${boardId}`
+    let copied = false
     try {
       await navigator.clipboard.writeText(url)
-      toast('Board link copied. Anyone with it can join and edit.')
+      copied = true
     } catch {
-      void copyDialog('Copy this link', url, 'Anyone with it can join and edit.')
+      /* refused: the dialog's Copy button tries again, with the link selected */
     }
+    void shareDialog('Share this board', url, copied, 'Scan the code or send the link. Anyone with it can join and edit.')
   }
 
   const commitName = () => {
@@ -127,13 +151,22 @@ export function TopBar({ boardId }: { boardId: string }) {
   }
 
 
+  // opened from Home: go back to it; otherwise (a shared link) Home takes this board's place, so
+  // the system back from Home never lands on a board
+  const back = (e: MouseEvent) => {
+    e.preventDefault()
+    const fromHome = (location.state as { fromHome?: boolean } | null)?.fromHome
+    afterMenuEntry(() => (fromHome ? nav(-1) : nav('/', { replace: true })))
+  }
+
   return (
     <>
       <div className={`${s.panelBar} ${s.topLeft}`} data-nodrag ref={leftRef}>
-        <Link to="/" className={s.logo} title="All boards">
-          <img src={`${import.meta.env.BASE_URL}favicon.svg`} width={26} height={26} alt="Gooseboard" />
+        <Link to="/" className={s.back} title="All boards" aria-label="Back to all boards" onClick={back}>
+          <Icon name="arrowLeft" />
         </Link>
         <input
+          ref={nameRef}
           className={s.boardName}
           value={draft ?? name}
           placeholder="Untitled board"
@@ -144,7 +177,6 @@ export function TopBar({ boardId }: { boardId: string }) {
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
             if (e.key === 'Escape') setDraft(null)
           }}
-          size={Math.max(12, (draft ?? name).length + 1)}
         />
         <button className={s.status} onClick={() => setShowConn(!showConn)} title="Connection status" data-conn-toggle>
           <span className={`${s.led} ${up > 0 ? s.ledOk : s.ledBad}`} />

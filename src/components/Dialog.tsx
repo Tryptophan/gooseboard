@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import qrcode from 'qrcode-generator'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import s from './Dialog.module.css'
 
 /**
@@ -9,6 +10,8 @@ type Req =
   | { kind: 'confirm'; title: string; message?: string; ok?: string; danger?: boolean; done: (v: boolean) => void }
   | { kind: 'prompt'; title: string; message?: string; value?: string; placeholder?: string; ok?: string; done: (v: string | null) => void }
   | { kind: 'copy'; title: string; message?: string; value: string; done: () => void }
+  /** a link to share: as a QR code, and as text to copy (`copied`: already on the clipboard) */
+  | { kind: 'share'; title: string; message?: string; value: string; copied: boolean; done: () => void }
 
 let current: Req | null = null
 const queue: Req[] = []
@@ -42,6 +45,30 @@ export function copyDialog(title: string, value: string, message?: string): Prom
   return new Promise((done) => show({ kind: 'copy', title, value, message, done }))
 }
 
+/** Shows `url` as a QR code and as a link with a copy button; `copied` says it's on the clipboard already. */
+export function shareDialog(title: string, url: string, copied: boolean, message?: string): Promise<void> {
+  return new Promise((done) => show({ kind: 'share', title, value: url, copied, message, done }))
+}
+
+/** `text` as a QR code: dark squares on white, with the quiet margin scanners need, whatever the theme. */
+function QrCode({ text }: { text: string }) {
+  const { d, n } = useMemo(() => {
+    const qr = qrcode(0, 'M')
+    qr.addData(text)
+    qr.make()
+    const n = qr.getModuleCount()
+    let d = ''
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.isDark(y, x)) d += `M${x + 4} ${y + 4}h1v1h-1z`
+    return { d, n: n + 8 }
+  }, [text])
+  return (
+    <svg className={s.qr} viewBox={`0 0 ${n} ${n}`} role="img" aria-label="QR code of the link" shapeRendering="crispEdges">
+      <rect width={n} height={n} fill="#fff" />
+      <path d={d} fill="#000" />
+    </svg>
+  )
+}
+
 const subscribe = (l: () => void) => {
   listeners.add(l)
   return () => void listeners.delete(l)
@@ -54,7 +81,7 @@ export function DialogHost() {
 
 function DialogBox({ req }: { req: Req }) {
   const [text, setText] = useState(req.kind === 'confirm' ? '' : (req.value ?? ''))
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState(req.kind === 'share' && req.copied)
   const inputRef = useRef<HTMLInputElement>(null)
   const okRef = useRef<HTMLButtonElement>(null)
 
@@ -75,7 +102,7 @@ function DialogBox({ req }: { req: Req }) {
   const copy = async () => {
     inputRef.current?.select()
     try {
-      await navigator.clipboard.writeText(req.kind === 'copy' ? req.value : '')
+      await navigator.clipboard.writeText(req.kind === 'copy' || req.kind === 'share' ? req.value : '')
       setCopied(true)
     } catch {
       // selected above: the person can still press Ctrl+C
@@ -101,18 +128,20 @@ function DialogBox({ req }: { req: Req }) {
         aria-labelledby="dialog-title"
         onSubmit={(e) => {
           e.preventDefault()
-          if (req.kind === 'copy') void copy()
+          if (req.kind === 'copy' || req.kind === 'share') void copy()
           else close(true)
         }}
       >
         <b id="dialog-title">{req.title}</b>
+        {req.kind === 'share' && <QrCode text={req.value} />}
         {req.message && <p>{req.message}</p>}
         {req.kind !== 'confirm' && (
-          <input ref={inputRef} value={text} readOnly={req.kind === 'copy'} placeholder={req.kind === 'prompt' ? req.placeholder : undefined} onChange={(e) => setText(e.target.value)} />
+          <input ref={inputRef} value={text} readOnly={req.kind === 'copy' || req.kind === 'share'} placeholder={req.kind === 'prompt' ? req.placeholder : undefined} onChange={(e) => setText(e.target.value)} />
         )}
         <div className={s.buttons}>
+          {req.kind === 'share' && <span className={s.status}>{copied ? 'Link copied to the clipboard' : ''}</span>}
           <button type="button" onClick={() => close(false)}>
-            {req.kind === 'copy' ? 'Close' : 'Cancel'}
+            {req.kind === 'copy' || req.kind === 'share' ? 'Close' : 'Cancel'}
           </button>
           <button
             ref={okRef}
@@ -120,7 +149,7 @@ function DialogBox({ req }: { req: Req }) {
             className={req.kind === 'confirm' && req.danger ? s.danger : s.primary}
             disabled={req.kind === 'prompt' && !text.trim()}
           >
-            {req.kind === 'copy' ? (copied ? 'Copied!' : 'Copy') : (req.ok ?? 'OK')}
+            {req.kind === 'copy' || req.kind === 'share' ? (copied ? 'Copied!' : 'Copy') : (req.ok ?? 'OK')}
           </button>
         </div>
       </form>

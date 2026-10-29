@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { DOWNLOAD_TIP, SYNC_TIP } from '../lib/files'
 import { getAutoSyncMax } from '../lib/autoSync'
 import { loadVolume, saveVolume, type MediaItem } from '../lib/media'
 import type { FileItem } from '../model/types'
@@ -211,7 +212,7 @@ function MediaActions({ item }: { item: FileItem }) {
   const canSync = item.size > getAutoSyncMax() && fileSync.canSync(item)
   const preview = usePreview()
   const req = fileReq(item)
-  const args = { ownerId: item.owner, ownerName: item.ownerName, req, name: item.name, size: item.size, mime: item.mime }
+  const args = { item, ownerId: item.owner, ownerName: item.ownerName, req, name: item.name, size: item.size, mime: item.mime }
   // a cached copy of my own small file still serves after a reload, so no relink is needed
   const mine = item.owner === profile.id
   const unlinked = mine && !sources.isReady(item.key) && sync.status !== 'synced'
@@ -231,7 +232,7 @@ function MediaActions({ item }: { item: FileItem }) {
           </button>
         )}
         {canSync && (
-          <button title="Sync: keep a copy in this browser, so it opens instantly and you can share it on" onClick={() => fileSync.syncNow(item)}>
+          <button title={SYNC_TIP} onClick={() => fileSync.syncNow(item)}>
             <Icon name="cloudDown" size={15} />
           </button>
         )}
@@ -242,7 +243,7 @@ function MediaActions({ item }: { item: FileItem }) {
         >
           <Icon name="eye" size={15} />
         </button>
-        <button title={blocked ? why : 'Download'} aria-disabled={blocked} onClick={() => !blocked && void files.download(args)}>
+        <button title={blocked ? why : DOWNLOAD_TIP} aria-disabled={blocked} onClick={() => !blocked && void files.download(args)}>
           <Icon name="download" size={15} />
         </button>
       </div>

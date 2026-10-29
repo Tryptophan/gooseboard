@@ -30,7 +30,7 @@ export function openMenu(e: { clientX: number; clientY: number; preventDefault()
   e.stopPropagation()
   // a touch long-press can open it twice: our timer and Android's native contextmenu
   if (lastWasTouch() && current && performance.now() - openedAt < 1000) return
-  // no leading, trailing or doubled separators once conditional entries drop out
+  // no leading, trailing, or doubled separators once conditional entries drop out
   const clean: MenuEntry[] = []
   for (const x of entries) {
     if (!x || (x === 'sep' && (!clean.length || clean[clean.length - 1] === 'sep'))) continue

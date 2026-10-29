@@ -4,7 +4,10 @@
 .box p { margin: 0; color: var(--muted); line-height: 1.45; font-size: 13.5px; }
 .box input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
 .box input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-.buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.buttons { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 4px; }
+/* sharing: the link as a QR code, and whether it's on the clipboard */
+.qr { display: block; width: min(220px, 100%); height: auto; margin: 4px auto; border-radius: 8px; border: 1px solid var(--border); }
+.status { flex: 1; font-size: 12.5px; color: var(--muted); }
 .buttons button { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; font-weight: 600; }
 .buttons button:hover:not(:disabled) { background: var(--hover); }
 .buttons button:disabled { opacity: 0.5; cursor: default; }

@@ -7,6 +7,9 @@ import { initPwa } from './net/pwa'
 import { initStreaming } from './net/streamSW'
 import './styles/global.css'
 
+// the installed app starts at "/": make that Home's own entry ("#/"), not one more behind it
+if (!location.hash) history.replaceState(history.state, '', '#/')
+
 installDiag()
 registerEnvDiag()
 initPwa(initStreaming())

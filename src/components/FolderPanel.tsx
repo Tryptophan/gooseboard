@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
-import { formatSize, kindOf } from '../lib/files'
+import { DOWNLOAD_TIP, formatSize, kindOf } from '../lib/files'
 import type { Vec } from '../lib/geometry'
 import { toast } from '../lib/toast'
 import { lastWasTouch, longPressMenu, useCoarse } from '../lib/touch'
@@ -363,7 +363,7 @@ function VirtualBody({ folder, drag, hover }: { folder: FolderItem; drag: StartD
               />
             ))}
           </div>
-          <p className={s.hint}>{coarse ? 'Tap to open, hold for more.' : 'Double-click to open. Drag onto the board, a folder or the path above to move.'}</p>
+          <p className={s.hint}>{coarse ? 'Tap to open, hold for more.' : 'Double-click to open. Drag onto the board, a folder, or the path above to move.'}</p>
         </>
       )}
     </div>
@@ -390,7 +390,7 @@ function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, on
   let sub = ''
   const fileArgs =
     item.type === 'file'
-      ? { ownerId: item.owner, ownerName: item.ownerName, req: { op: 'file', kind: 'file', key: item.key, hash: item.hash } as const, name: item.name, size: item.size, mime: item.mime }
+      ? { item, ownerId: item.owner, ownerName: item.ownerName, req: { op: 'file', kind: 'file', key: item.key, hash: item.hash } as const, name: item.name, size: item.size, mime: item.mime }
       : null
   const canPrev = !!fileArgs && canPreview(fileArgs.name, fileArgs.mime, fileArgs.size)
   const url = item.type === 'link' ? normalizeUrl(item.url) : null
@@ -486,7 +486,7 @@ function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, on
           </button>
         )}
         {fileArgs && (
-          <button title="Download" onClick={() => void files.download(fileArgs)}>
+          <button title={DOWNLOAD_TIP} onClick={() => void files.download(fileArgs)}>
             <Icon name="download" size={14} />
           </button>
         )}
@@ -676,7 +676,7 @@ function Entry({ folder, entry, path, selected, onSelect, drag, onOpen }: EntryP
               <Icon name="eye" size={14} />
             </button>
           )}
-          <button title="Download" onClick={() => void files.download(args)}>
+          <button title={DOWNLOAD_TIP} onClick={() => void files.download(args)}>
             <Icon name="download" size={14} />
           </button>
           <button title="Copy onto the board" onClick={() => void copyOut()}>

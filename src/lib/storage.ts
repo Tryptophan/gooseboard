@@ -22,6 +22,7 @@ const K = {
   boards: 'gooseboard:boards',
   theme: 'gooseboard:theme',
   camera: (id: string) => `gooseboard:camera:${id}`,
+  chatSeen: (id: string) => `gooseboard:chatSeen:${id}`,
 }
 
 function read<T>(key: string): T | null {
@@ -138,3 +139,6 @@ export const saveTheme = (t: ThemePref) => write(K.theme, t)
 
 export const loadCamera = (id: string) => read<{ x: number; y: number; z: number }>(K.camera(id))
 export const saveCamera = (id: string, c: { x: number; y: number; z: number }) => write(K.camera(id), c)
+/** when this browser last looked at a board's chat (ms, by the latest message's clock) */
+export const loadChatSeen = (id: string) => read<number>(K.chatSeen(id)) ?? 0
+export const saveChatSeen = (id: string, at: number) => write(K.chatSeen(id), at)

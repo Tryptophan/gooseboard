@@ -49,12 +49,13 @@ export function MicButton() {
     return () => window.removeEventListener(MIC_EVENT, h)
   }, [])
 
-  const live = st.phase === 'listening'
+  // dictating into the chat shows there, not here
+  const live = st.phase === 'listening' && !st.chat
   const title = live ? 'Stop voice note  (M)' : 'Voice note  (M)'
   return (
     <>
       <button
-        className={`${live ? s.micLive : ''} ${live && st.speaking ? s.micHeard : ''} ${st.phase === 'starting' ? s.micStarting : ''}`}
+        className={`${live ? s.micLive : ''} ${live && st.speaking ? s.micHeard : ''} ${st.phase === 'starting' && !st.chat ? s.micStarting : ''}`}
         aria-pressed={live}
         title={title}
         onClick={() => void click()}
@@ -75,7 +76,7 @@ export function MicButton() {
 }
 
 /** Asks once before the speech model downloads, then shows the download with a cancel button. */
-function DownloadModal({ spec, onClose }: { spec: ModelSpec; onClose: (ok: boolean) => void }) {
+export function DownloadModal({ spec, onClose }: { spec: ModelSpec; onClose: (ok: boolean) => void }) {
   const [pct, setPct] = useState<number | null>(null)
   const [err, setErr] = useState<string | null>(null)
 

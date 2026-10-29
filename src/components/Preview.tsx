@@ -1,15 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react'
 import { embedFor } from '../lib/embed'
-import { formatSize, kindOf } from '../lib/files'
+import { DOWNLOAD_TIP, formatSize, kindOf, SYNC_TIP } from '../lib/files'
 import type { GetReq, ReqState } from '../net/p2p'
 import { loadVolume, saveVolume } from '../lib/media'
 import { canStream } from '../net/streamSW'
-import { useSession } from '../state/session'
+import { getAutoSyncMax } from '../lib/autoSync'
+import type { FileItem } from '../model/types'
+import { useFileSync, useSession } from '../state/session'
 import { EmbedFrame } from './EmbedFrame'
 import { Icon } from './Icons'
 import s from './Preview.module.css'
 
 export interface PreviewArgs {
+  /** the board item it is, when it's one (not a file in a shared disk folder): lets the preview offer Sync */
+  item?: FileItem
   ownerId: string
   ownerName: string
   req: GetReq
@@ -43,6 +47,27 @@ const waitNote = (st: ReqState, owner: string) =>
 
 /** MEDIA_ERR_DECODE / MEDIA_ERR_SRC_NOT_SUPPORTED: the format, not the transfer, is the problem */
 const unplayable = (e: MediaError | null) => e?.code === 3 || e?.code === 4
+
+/** Keeps a copy in this browser, for files too big to sync on their own (as on the file's card). */
+function SyncButton({ item }: { item: FileItem }) {
+  const fileSync = useFileSync()
+  const [pressed, setPressed] = useState(false)
+  const st = fileSync.stateOf(item)
+  if (st.status === 'syncing') return <span>Syncing {Math.round((st.pct ?? 0) * 100)}%</span>
+  if (pressed && st.status === 'synced') return <span>✓ Synced</span>
+  if (item.size <= getAutoSyncMax() || !fileSync.canSync(item)) return null
+  return (
+    <button
+      title={SYNC_TIP}
+      onClick={() => {
+        setPressed(true)
+        fileSync.syncNow(item)
+      }}
+    >
+      <Icon name="cloudDown" size={16} /> Sync
+    </button>
+  )
+}
 
 export function PreviewProvider({ children }: { children: ReactNode }) {
   const [args, setArgs] = useState<PreviewArgs | null>(null)
@@ -182,7 +207,8 @@ function PreviewModal({ args, onClose }: { args: PreviewArgs; onClose: () => voi
         <div className={s.head}>
           <b>{args.name}</b>
           <span>{formatSize(args.size)}</span>
-          <button onClick={() => void files.download({ ownerId: args.ownerId, ownerName: args.ownerName, req: args.req, name: args.name, size: args.size })}>
+          {args.item && <SyncButton item={args.item} />}
+          <button title={DOWNLOAD_TIP} onClick={() => void files.download({ ownerId: args.ownerId, ownerName: args.ownerName, req: args.req, name: args.name, size: args.size })}>
             <Icon name="download" size={16} /> Download
           </button>
           <button onClick={onClose} aria-label="Close">

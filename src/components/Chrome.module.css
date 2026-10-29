@@ -6,8 +6,11 @@
 .topLeft, .topRight { min-height: 48px; }
 .topLeft { top: calc(12px + var(--sat)); left: calc(12px + var(--sal)); }
 .topRight { top: calc(12px + var(--sat)); right: calc(12px + var(--sar)); }
-.logo { display: grid; place-items: center; border-radius: 8px; }
-.boardName { border: 0; background: transparent; font-weight: 650; font-size: 15px; padding: 5px 6px; border-radius: 8px; min-width: 120px; max-width: 40vw; }
+/* back to all boards: a full-size target, pulled toward the name so the space before it matches the space after */
+.back { display: grid; place-items: center; width: 34px; height: 34px; margin-right: -8px; border-radius: 8px; color: var(--text); }
+.back:hover { background: var(--hover); }
+.back:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.boardName { border: 0; background: transparent; font-weight: 650; font-size: 15px; padding: 5px 6px; border-radius: 8px; min-width: 40px; max-width: 40vw; text-overflow: ellipsis; }
 .boardName:hover, .boardName:focus { background: var(--hover); outline: none; }
 .status { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: transparent; border-radius: 999px; padding: 4px 10px; cursor: pointer; font-size: 12.5px; color: var(--muted); }
 .status:hover { background: var(--hover); }
@@ -107,6 +110,7 @@
   .minimap { display: none; }
   .topLeft, .topRight { gap: 4px; padding: 4px; min-height: 46px; }
   .boardName { min-width: 40px; max-width: 26vw; }
+  .back { margin-right: -10px; }
   .status { padding: 8px; }
   .label { display: none; }
   .shareBtn { padding: 9px; }

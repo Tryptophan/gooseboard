@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { formatSize, kindOf } from '../lib/files'
+import { DOWNLOAD_TIP, formatSize, kindOf, SYNC_TIP } from '../lib/files'
 import { getAutoSyncMax } from '../lib/autoSync'
 import { mediaBox } from '../lib/media'
 import type { FileItem } from '../model/types'
@@ -34,7 +34,7 @@ export function FileBody({ item }: { item: FileItem }) {
   const kind = kindOf(item.name, item.mime)
   const thumb = safeThumb(item.thumb)
   const req = { op: 'file', kind: 'file', key: item.key, hash: item.hash } as const
-  const args = { ownerId: item.owner, ownerName: item.ownerName, req, name: item.name, size: item.size, mime: item.mime }
+  const args = { item, ownerId: item.owner, ownerName: item.ownerName, req, name: item.name, size: item.size, mime: item.mime }
 
   // pictures and videos added before sizes were recorded: take the aspect from the thumbnail and show them bare
   useEffect(() => {
@@ -83,7 +83,7 @@ export function FileBody({ item }: { item: FileItem }) {
           </button>
         )}
         {canSync && (
-          <button title="Sync: keep a copy in this browser, so it opens instantly and you can share it on" onClick={() => fileSync.syncNow(item)}>
+          <button title={SYNC_TIP} onClick={() => fileSync.syncNow(item)}>
             <Icon name="cloudDown" size={15} />
           </button>
         )}
@@ -92,7 +92,7 @@ export function FileBody({ item }: { item: FileItem }) {
             <Icon name="eye" size={15} />
           </button>
         )}
-        <button title={blocked ? why : 'Download'} aria-disabled={blocked} onClick={() => !blocked && void files.download(args)}>
+        <button title={blocked ? why : DOWNLOAD_TIP} aria-disabled={blocked} onClick={() => !blocked && void files.download(args)}>
           <Icon name="download" size={15} />
         </button>
       </div>

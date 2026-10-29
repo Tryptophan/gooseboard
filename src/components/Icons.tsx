@@ -28,6 +28,7 @@ const P: Record<string, ReactNode> = {
   close: <path d="M6 6l12 12M18 6L6 18" />,
   home: <path d="M4 11l8-7 8 7M6 10v10h12V10" />,
   up: <path d="M12 19V5M6 11l6-6 6 6" />,
+  arrowLeft: <path d="M19 12H5M11 6l-6 6 6 6" />,
   transfers: <path d="M8 20V4M4 8l4-4 4 4M16 4v16M12 16l4 4 4-4" />,
   refresh: <path d="M20 11a8 8 0 00-14-4L4 9M4 4v5h5M4 13a8 8 0 0014 4l2-2M20 20v-5h-5" />,
   user: <path d="M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0" />,

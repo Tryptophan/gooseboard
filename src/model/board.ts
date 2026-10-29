@@ -42,6 +42,8 @@ export class BoardStore {
   readonly doc = new Y.Doc()
   readonly items = this.doc.getMap<Y.Map<any>>('items')
   readonly meta = this.doc.getMap<any>('meta')
+  /** chat messages, oldest first (model/chat) */
+  readonly chat = this.doc.getArray<Y.Map<any>>('chat')
   readonly provider: WebrtcProvider
   readonly persistence: IndexeddbPersistence
   readonly undo: Y.UndoManager

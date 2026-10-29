@@ -46,7 +46,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 /* phones: the board's name and presence get the whole first line, its actions wrap below on the right */
 @media (max-width: 560px) {
   .page { padding: 24px 16px 48px; }
-  /* logo, title and theme on one line; the tagline gets the full width below */
+  /* logo, title, and theme on one line; the tagline gets the full width below */
   .head { display: grid; grid-template-columns: auto 1fr auto; column-gap: 12px; row-gap: 8px; }
   /* the install button, when there is one, sits beside the theme button */
   .head > button + button { grid-column: 4; grid-row: 1; }

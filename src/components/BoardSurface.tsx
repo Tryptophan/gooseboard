@@ -929,7 +929,7 @@ export function BoardSurface() {
     [store, dispatch],
   )
 
-  /** Gooseboard items, a link or plain text (as a note), centred on `at`. */
+  /** Gooseboard items, a link, or plain text (as a note), centred on `at`. */
   const pasteText = useCallback(
     (text: string, at: Vec) => {
       if (text.startsWith(CLIP_PREFIX)) {

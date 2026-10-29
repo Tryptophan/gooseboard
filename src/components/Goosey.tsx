@@ -5,15 +5,17 @@ import { AUTO_SYNC_CHOICES, getAutoSyncMax, setAutoSyncMax, subscribeAutoSync } 
 import { voice } from '../ai/voice'
 import { collectDiag } from '../lib/diag'
 import { formatSize } from '../lib/files'
+import { chatLog } from '../model/chat'
 import type { ThemePref } from '../lib/storage'
 import { toast } from '../lib/toast'
 import { useCoarse } from '../lib/touch'
 import { useInstallWay } from '../net/pwa'
-import { getGoosey, openMenu, subscribeGoosey, type Tab } from '../state/goosey'
+import { getGoosey, leaveMenuEntry, openMenu, subscribeGoosey, type Tab } from '../state/goosey'
 import { useSession } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
 import { confirmDialog } from './Dialog'
 import { Icon } from './Icons'
+import { ChatTab } from './GooseyChat'
 import { install } from './Install'
 import { TransfersTab, useTransferProgress } from './TransferPanel'
 import c from './Chrome.module.css'
@@ -24,7 +26,7 @@ const useGoosey = () => useSyncExternalStore(subscribeGoosey, getGoosey)
 /** Most-recent pointer position, for Goosey's glances. */
 const pointer = { x: -1, y: -1 }
 
-/** Goosey: the helper goose in the bottom-left corner. Click him for settings and help. */
+/** Goosey: the helper goose in the bottom-left corner. Click him for chat, settings, and help. */
 export function Goosey() {
   const { menu } = useGoosey()
   return (
@@ -32,6 +34,7 @@ export function Goosey() {
       {menu && <Menu tab={menu} />}
       <Character open={!!menu} />
       <TransferBadge />
+      <ChatBadge />
     </div>
   )
 }
@@ -90,11 +93,11 @@ function Character({ open }: { open: boolean }) {
     <button
       ref={ref}
       className={`${s.goose} ${hop ? s.hop : ''}`}
-      aria-label="Goosey: settings and help"
+      aria-label="Goosey: chat, settings, and help"
       aria-expanded={open}
       onClick={() => {
         setHop(true)
-        openMenu(open ? null : 'settings')
+        openMenu(open ? null : 'chat')
       }}
       onAnimationEnd={(e) => e.animationName.includes('hop') && setHop(false)}
       data-goosey-toggle
@@ -118,6 +121,20 @@ function TransferBadge() {
         <circle cx="12" cy="12" r={r} className={s.ring} strokeDasharray={len} strokeDashoffset={len * (1 - pct)} />
       </svg>
       <span>{count}</span>
+    </button>
+  )
+}
+
+/** Unread chat messages, on Goosey's other shoulder. Opens the Chat tab. */
+function ChatBadge() {
+  const { store } = useSession()
+  const log = chatLog(store)
+  const n = useSyncExternalStore(log.subscribe, log.unread)
+  const { menu } = useGoosey()
+  if (!n || menu === 'chat') return null
+  return (
+    <button className={s.unread} title={`${n} new message${n > 1 ? 's' : ''}`} onClick={() => openMenu('chat')}>
+      {n > 99 ? '99+' : n}
     </button>
   )
 }
@@ -146,7 +163,40 @@ function GooseyArt({ look = 0 }: { look?: number }) {
   )
 }
 
+/**
+ * The open menu has a history entry of its own, so the phone's back gesture closes it instead of
+ * leaving the board. Closed any other way, the entry is taken back off.
+ */
+function useMenuBackEntry() {
+  const entry = useRef(0)
+  const live = useRef(false)
+  const popped = useRef(false)
+  useEffect(() => {
+    live.current = true
+    // StrictMode runs this twice on the same menu: one entry is enough
+    if (!entry.current) {
+      entry.current = ++menuEntries
+      history.pushState({ ...history.state, goosey: entry.current }, '')
+    }
+    const pop = () => {
+      popped.current = true
+      openMenu(null)
+    }
+    window.addEventListener('popstate', pop)
+    return () => {
+      live.current = false
+      window.removeEventListener('popstate', pop)
+      // a re-run (StrictMode) sets live again before this runs
+      queueMicrotask(() => {
+        if (!live.current && !popped.current && history.state?.goosey === entry.current) leaveMenuEntry()
+      })
+    }
+  }, [])
+}
+let menuEntries = 0
+
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'chat', label: 'Chat' },
   { id: 'settings', label: 'Settings' },
   { id: 'transfers', label: 'Transfers' },
   { id: 'help', label: 'Help' },
@@ -154,6 +204,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 function Menu({ tab }: { tab: Tab }) {
   const ref = useRef<HTMLDivElement>(null)
+  useMenuBackEntry()
   useEffect(() => {
     const down = (e: PointerEvent) => {
       const t = e.target as Element
@@ -177,7 +228,8 @@ function Menu({ tab }: { tab: Tab }) {
           </button>
         ))}
       </div>
-      <div className={s.page}>
+      <div className={`${s.page} ${tab === 'chat' ? s.chatPage : ''}`}>
+        {tab === 'chat' && <ChatTab />}
         {tab === 'settings' && <Settings />}
         {tab === 'transfers' && <TransfersTab />}
         {tab === 'help' && <Help />}
@@ -348,8 +400,9 @@ function Help() {
     <>
       <b className={s.sub}>Getting started</b>
       <ul className={s.tips}>
-        <li>{coarse ? 'Add files, folders and links from the toolbar.' : 'Drop or paste files, folders, images and links anywhere.'}</li>
+        <li>{coarse ? 'Add files, folders, and links from the toolbar.' : 'Drop or paste files, folders, images, and links anywhere.'}</li>
         <li>Press the mic in the toolbar and talk: what you say is written into a note, live for everyone. Speech is recognised on your device.</li>
+        <li>Chat with everyone on the board in the Chat tab; press its mic to say your message instead of typing it.</li>
         <li>{coarse ? 'Hold' : 'Right-click'} anything for more options.</li>
         <li>{coarse ? 'Tap' : 'Click'} someone’s goose in the top right to follow their view.</li>
       </ul>

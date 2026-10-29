@@ -57,3 +57,8 @@ export const canDirPicker = () => typeof (window as any).showDirectoryPicker ===
 export const canOpenPicker = () => typeof (window as any).showOpenFilePicker === 'function'
 
 export const isUrl = (s: string) => /^https?:\/\/\S+$/i.test(s.trim())
+
+/** What a file's Download button does, for its tooltip. */
+export const DOWNLOAD_TIP = 'Download: save the file to this device, to keep or to open in another app'
+/** What a file's Sync button does, for its tooltip. */
+export const SYNC_TIP = 'Sync: keep a copy in this browser, so it opens instantly, stays available when its owner is offline, and others can get it from you'

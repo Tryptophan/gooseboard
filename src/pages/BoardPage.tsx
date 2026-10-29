@@ -18,6 +18,7 @@ import { acquireSession, releaseSession, type Session } from '../net/session'
 import { CameraProvider, useCamera } from '../state/camera'
 import { SessionProvider, useSnapshot } from '../state/session'
 import { useUiDispatch } from '../state/ui'
+import { watchEmbedTitles } from '../lib/embedTitle'
 import chrome from '../components/Chrome.module.css'
 
 export default function BoardPage() {
@@ -36,12 +37,16 @@ function BoardLoader({ id }: { id: string }) {
     const s = acquireSession(id)
     touchBoard(id)
     setSession(s)
+    const stopTitles = watchEmbedTitles(s.store)
     s.store.onLoaded(() => {
       const pending = takePendingName(id)
       if (pending) s.store.setName(pending)
       setReady(true)
     })
-    return () => releaseSession(id)
+    return () => {
+      stopTitles()
+      releaseSession(id)
+    }
   }, [id, dispatch])
 
   if (!session || !ready) return <div style={{ position: 'fixed', inset: 0, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>Opening board…</div>
