@@ -224,6 +224,7 @@ export function TopBar({ boardId }: { boardId: string }) {
           </p>
           <button
             className={s.connAction}
+            title="Link a device on the same Wi-Fi or hotspot to this board by scanning QR codes, with no internet needed"
             onClick={() => {
               setShowConn(false)
               setLinking(true)
