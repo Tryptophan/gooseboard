@@ -8,7 +8,7 @@ import { toast } from '../lib/toast'
 import { downsample, pointsBounds, strokePath } from '../lib/stroke'
 import { lastPointerType, LONG_PRESS_MS, SLOP, useCoarse } from '../lib/touch'
 import { normalizeUrl } from '../lib/url'
-import { addDropItems, pastedItems, pickFiles, readDrop } from '../model/actions'
+import { addDropItems, pastedItems, pickDirectory, pickFiles, readDrop } from '../model/actions'
 import { takeShare } from '../lib/share'
 import type { ExportedItem } from '../model/board'
 import { jsonToFragment } from '../model/noteSchema'
@@ -19,6 +19,7 @@ import { useUi, useUiDispatch } from '../state/ui'
 import { ContextBar } from './ContextBar'
 import { toggleMic } from './MicButton'
 import { closeMenu, openMenu, type MenuEntry } from './ContextMenu'
+import { openExport } from './ExportDialog'
 import { promptDialog } from './Dialog'
 import { canPreview, usePreview } from './Preview'
 import { ItemView } from './Items'
@@ -846,11 +847,19 @@ export function BoardSurface() {
       },
       { label: 'Add link here', icon: 'link', hint: 'K', onSelect: () => dispatch({ type: 'editing', id: placeItem({ type: 'link', url: '' }, at) }) },
       {
-        label: 'Add files here…',
+        label: 'Share files here…',
         icon: 'file',
         onSelect: async () => {
           const items = await pickFiles(true)
           if (items.length) dispatch({ type: 'select', ids: await addDropItems(session, items, at, null) })
+        },
+      },
+      {
+        label: 'Share a folder here…',
+        icon: 'disk',
+        onSelect: async () => {
+          const it = await pickDirectory()
+          if (it) dispatch({ type: 'select', ids: await addDropItems(session, [it], at, null) })
         },
       },
       'sep',
@@ -865,6 +874,7 @@ export function BoardSurface() {
           if (b) camApi.fitRect(b)
         },
       },
+      { label: 'Export as image…', icon: 'image', hint: 'Ctrl+Shift+E', disabled: !snapRef.current.surface.length, onSelect: openExport },
     ])
   }
 
@@ -1069,6 +1079,9 @@ export function BoardSurface() {
           e.preventDefault()
           store.undo.stopCapturing()
           dispatch({ type: 'select', ids: store.duplicate(sel) })
+        } else if (k === 'e' && e.shiftKey) {
+          e.preventDefault()
+          openExport()
         } else if (k === 'a') {
           e.preventDefault()
           dispatch({ type: 'select', ids: snapRef.current.surface.map((i) => i.id) })

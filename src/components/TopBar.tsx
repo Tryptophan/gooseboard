@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { leaveLayers } from '../lib/back'
 import { renameBoardLocal, saveProfile, USER_COLORS } from '../lib/storage'
 import { signalStatus } from '../net/signal'
-import { afterMenuEntry } from '../state/goosey'
 import { usePeers, useSession } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
 import { shareDialog } from './Dialog'
@@ -156,7 +156,7 @@ export function TopBar({ boardId }: { boardId: string }) {
   const back = (e: MouseEvent) => {
     e.preventDefault()
     const fromHome = (location.state as { fromHome?: boolean } | null)?.fromHome
-    afterMenuEntry(() => (fromHome ? nav(-1) : nav('/', { replace: true })))
+    leaveLayers(() => (fromHome ? nav(-1) : nav('/', { replace: true })))
   }
 
   return (

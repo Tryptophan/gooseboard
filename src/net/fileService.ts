@@ -376,6 +376,22 @@ export class FileService {
   }
 
   /**
+   * Sharp rendition of an image from what this device already holds (a preview fetched before,
+   * the owner's own disk, or a kept copy), never from the network: null if there's none.
+   */
+  async localImage(ownerId: string, key: string, hash?: string): Promise<Blob | null> {
+    const cached = await get<Blob>(`${ownerId}\0${key}`, previewStore).catch(() => undefined)
+    if (cached) return cached
+    if (ownerId !== this.self.id && !(hash && this.mirror.has(hash, this.board))) return null
+    // served locally, but a relink-pending file would wait for good
+    const ctl = new AbortController()
+    const t = setTimeout(() => ctl.abort(), 5000)
+    return this.getBlob(ownerId, { op: 'preview', kind: 'file', key, hash }, undefined, { signal: ctl.signal })
+      .catch(() => null)
+      .finally(() => clearTimeout(t))
+  }
+
+  /**
    * Live listing from the owner. The last listing seen is kept so the folder stays browsable
    * while the owner is offline (files then come from peers who hold copies).
    */

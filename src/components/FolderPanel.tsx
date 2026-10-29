@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
+import { useBackTrail } from '../lib/back'
 import { DOWNLOAD_TIP, formatSize, kindOf } from '../lib/files'
 import type { Vec } from '../lib/geometry'
 import { toast } from '../lib/toast'
@@ -28,7 +29,10 @@ const THUMB_DWELL_MS = 150
 export function FolderPanel() {
   const ui = useUi()
   const snap = useSnapshot()
+  const dispatch = useUiDispatch()
   const folder = ui.openFolder ? snap.all.get(ui.openFolder) : undefined
+  // back steps out to the folder before, then to the board
+  useBackTrail(ui.openFolder, null, (id) => dispatch({ type: 'folder', id }))
   if (!folder || folder.type !== 'folder') return null
   return <Shell key={folder.id} folder={folder} />
 }
@@ -183,6 +187,7 @@ function Shell({ folder }: { folder: FolderItem }) {
   const [name, setName] = useState<string | null>(null)
   // sub-directory inside a disk folder
   const [path, setPath] = useState<string[]>([])
+  useBackTrail(path.join('/'), '', (p) => setPath(p ? p.split('/') : []))
   const drag = useDrag(session, cam)
 
   const ancestors: FolderItem[] = []

@@ -1,5 +1,6 @@
 import qrcode from 'qrcode-generator'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useBackLayer } from '../lib/back'
 import s from './Dialog.module.css'
 
 /**
@@ -98,6 +99,7 @@ function DialogBox({ req }: { req: Req }) {
     else req.done()
     finish()
   }
+  useBackLayer(true, () => close(false))
 
   const copy = async () => {
     inputRef.current?.select()

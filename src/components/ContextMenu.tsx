@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useBackLayer } from '../lib/back'
 import { lastWasTouch } from '../lib/touch'
 import { Icon } from './Icons'
 import s from './ContextMenu.module.css'
@@ -58,6 +59,7 @@ function Menu({ open }: { open: Open }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ left: open.x, top: open.y })
   const [active, setActive] = useState(-1)
+  useBackLayer(true, closeMenu)
 
   // keep it on screen: flip left/up when it would overflow
   useLayoutEffect(() => {

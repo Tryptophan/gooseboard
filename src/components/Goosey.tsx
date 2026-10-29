@@ -3,6 +3,7 @@ import { engine } from '../ai/engine'
 import { cachedModelBytes, deleteAllModels } from '../ai/models'
 import { AUTO_SYNC_CHOICES, getAutoSyncMax, setAutoSyncMax, subscribeAutoSync } from '../lib/autoSync'
 import { voice } from '../ai/voice'
+import { useBackLayer } from '../lib/back'
 import { collectDiag } from '../lib/diag'
 import { formatSize } from '../lib/files'
 import { getBoards } from '../lib/storage'
@@ -12,7 +13,7 @@ import { toast } from '../lib/toast'
 import { useCoarse } from '../lib/touch'
 import { useInstallWay } from '../net/pwa'
 import { clearThumbs, thumbStats } from '../net/thumbCache'
-import { getGoosey, leaveMenuEntry, openMenu, subscribeGoosey, type Tab } from '../state/goosey'
+import { getGoosey, openMenu, subscribeGoosey, type Tab } from '../state/goosey'
 import { useSession } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
 import { confirmDialog } from './Dialog'
@@ -188,37 +189,6 @@ function GooseyArt({ look = 0, quick = false }: { look?: number; quick?: boolean
   )
 }
 
-/**
- * The open menu has a history entry of its own, so the phone's back gesture closes it instead of
- * leaving the board. Closed any other way, the entry is taken back off.
- */
-function useMenuBackEntry() {
-  const entry = useRef(0)
-  const live = useRef(false)
-  const popped = useRef(false)
-  useEffect(() => {
-    live.current = true
-    // StrictMode runs this twice on the same menu: one entry is enough
-    if (!entry.current) {
-      entry.current = ++menuEntries
-      history.pushState({ ...history.state, goosey: entry.current }, '')
-    }
-    const pop = () => {
-      popped.current = true
-      openMenu(null)
-    }
-    window.addEventListener('popstate', pop)
-    return () => {
-      live.current = false
-      window.removeEventListener('popstate', pop)
-      // a re-run (StrictMode) sets live again before this runs
-      queueMicrotask(() => {
-        if (!live.current && !popped.current && history.state?.goosey === entry.current) leaveMenuEntry()
-      })
-    }
-  }, [])
-}
-let menuEntries = 0
 
 /** labelled on a computer, icons on a phone (Goosey.module.css) */
 const TABS: { id: Tab; label: string; icon: string }[] = [
@@ -231,7 +201,8 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 
 function Menu({ tab }: { tab: Tab }) {
   const ref = useRef<HTMLDivElement>(null)
-  useMenuBackEntry()
+  // the phone's back gesture closes the menu instead of leaving the board
+  useBackLayer(true, () => openMenu(null))
   useEffect(() => {
     const down = (e: PointerEvent) => {
       const t = e.target as Element
@@ -438,6 +409,7 @@ const KEYS: [string, string][] = [
   ['Shift + Enter', 'Note in a big window'],
   ['Ctrl + D', 'Duplicate'],
   ['Ctrl + A', 'Select all'],
+  ['Ctrl + Shift + E', 'Export the board as an image'],
   ['Arrows', 'Nudge (Shift for 10px)'],
   ['] / [', 'Bring to front, send to back'],
   ['Ctrl + Z / Y', 'Undo, redo'],
@@ -453,6 +425,7 @@ const TOUCH: [string, string][] = [
   ['Double-tap', 'New note, or open what’s under your finger'],
   ['Tap again', 'Edit the selected note'],
   ['Hold', 'More options'],
+  ['Back', 'Close what’s open, or step out of a folder'],
   ['Hold, then drag', 'Select an area'],
   ['Select more', 'In the bar above a selection: tap items to add them'],
   ['Stylus', 'Draws even under Select; fingers then pan instead'],

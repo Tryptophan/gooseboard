@@ -6,6 +6,7 @@ import type * as Y from 'yjs'
 import { fragmentToHTML, noteExtensions, toggleTask } from '../model/noteSchema'
 import { voice } from '../ai/voice'
 import { NOTE_FONT_SIZES, type NoteFontSize, type NoteItem } from '../model/types'
+import { useBackLayer } from '../lib/back'
 import { useCoarse } from '../lib/touch'
 import { useSession, useSnapshot } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
@@ -158,6 +159,7 @@ export function NoteModal() {
 
 function NoteWindow({ fragment, item, onClose }: { fragment: Y.XmlFragment; item: NoteItem; onClose: () => void }) {
   const editor = useNoteEditor(fragment)
+  useBackLayer(true, onClose)
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', h)

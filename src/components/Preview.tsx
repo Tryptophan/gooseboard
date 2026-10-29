@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react'
+import { useBackLayer } from '../lib/back'
 import { embedFor } from '../lib/embed'
 import { DOWNLOAD_TIP, formatSize, kindOf, SYNC_TIP } from '../lib/files'
 import type { GetReq, ReqState } from '../net/p2p'
@@ -89,7 +90,9 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   )
 }
 
+/** Escape, or the phone's back gesture, closes it. */
 function useEscape(onClose: () => void) {
+  useBackLayer(true, onClose)
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', h)

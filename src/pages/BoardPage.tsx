@@ -7,6 +7,7 @@ import { NoteModal } from '../components/Note'
 import { Icon } from '../components/Icons'
 import { Minimap } from '../components/Minimap'
 import { PreviewProvider } from '../components/Preview'
+import { ExportHost } from '../components/ExportDialog'
 import { Toolbar } from '../components/Toolbar'
 import { TopBar } from '../components/TopBar'
 import { RelinkBanner, useLeaveGuard } from '../components/TransferPanel'
@@ -70,6 +71,7 @@ function Board({ id }: { id: string }) {
         <RelinkBanner />
         <FolderPanel />
         <NoteModal />
+        <ExportHost />
         <Toolbar />
         <div className={chrome.corner}>
           <Goosey />
