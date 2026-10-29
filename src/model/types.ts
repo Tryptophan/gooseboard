@@ -19,13 +19,10 @@ export interface NoteItem extends ItemBase {
   type: 'note'
   color: string
   title?: string
-  /** the note's base text size, from before sizes were set per run of text (see TextSize) */
-  fontSize?: NoteFontSize
 }
 
-export type NoteFontSize = 's' | 'm' | 'l' | 'xl'
-/** body text size in px on the board; the note window scales them up a little */
-export const NOTE_FONT_SIZES: Record<NoteFontSize, number> = { s: 12, m: 15, l: 19, xl: 25 }
+/** body text size in px on the board; the note window scales it up a little */
+export const NOTE_FONT_SIZE = 15
 
 export interface StrokeItem extends ItemBase {
   type: 'stroke'

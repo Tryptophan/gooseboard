@@ -5,7 +5,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import type * as Y from 'yjs'
 import { fragmentToHTML, noteExtensions, toggleTask } from '../model/noteSchema'
 import { voice } from '../ai/voice'
-import { NOTE_FONT_SIZES, type NoteFontSize, type NoteItem } from '../model/types'
+import { NOTE_FONT_SIZE, type NoteItem } from '../model/types'
 import { useBackLayer } from '../lib/back'
 import { useCoarse } from '../lib/touch'
 import { useSession, useSnapshot } from '../state/session'
@@ -15,7 +15,7 @@ import { Icon } from './Icons'
 import s from './Note.module.css'
 
 /** The note's look: its colour and text size (the window shows text a little larger). */
-const boxStyle = (item: NoteItem, k = 1) => ({ background: item.color, fontSize: NOTE_FONT_SIZES[item.fontSize ?? 'm'] * k })
+const boxStyle = (item: NoteItem, k = 1) => ({ background: item.color, fontSize: NOTE_FONT_SIZE * k })
 
 /** The note's title, editable in place; Enter moves on to the text. */
 function TitleInput({ item, editor, big }: { item: NoteItem; editor: Editor | null; big?: boolean }) {
@@ -182,10 +182,9 @@ function NoteWindow({ fragment, item, onClose }: { fragment: Y.XmlFragment; item
   )
 }
 
-const SIZE_LABEL: Record<NoteFontSize, string> = { s: 'Small text', m: 'Medium text', l: 'Large text', xl: 'Extra large text' }
+const LEVELS = [1, 2, 3, 4, 5, 6] as const
 
 export function NoteToolbar({ editor, variant }: { editor: Editor; variant: 'inline' | 'bare' }) {
-  const { store } = useSession()
   const [, force] = useState(0)
   useEffect(() => {
     const h = () => force((n) => n + 1)
@@ -203,31 +202,28 @@ export function NoteToolbar({ editor, variant }: { editor: Editor; variant: 'inl
       {B('Bold', 'bold', () => c().toggleBold().run(), editor.isActive('bold'))}
       {B('Italic', 'italic', () => c().toggleItalic().run(), editor.isActive('italic'))}
       {B('Strike', 'strike', () => c().toggleStrike().run(), editor.isActive('strike'))}
-      {B('Heading', 'heading', () => c().toggleHeading({ level: 3 }).run(), editor.isActive('heading'))}
       {B('Bullets', 'ul', () => c().toggleBulletList().run(), editor.isActive('bulletList'))}
       {B('Numbers', 'ol', () => c().toggleOrderedList().run(), editor.isActive('orderedList'))}
       {B('Checklist', 'check', () => c().toggleTaskList().run(), editor.isActive('taskList'))}
       {B('Code', 'code', () => c().toggleCodeBlock().run(), editor.isActive('codeBlock'))}
       <span className={s.sep} />
       <button
-        className={s.textSize}
-        title="Text size of the selection"
+        className={s.headingSize}
+        title="Heading size"
         onMouseDown={(e) => e.preventDefault()}
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect()
-          const cur: NoteFontSize = editor.getAttributes('textSize').size ?? 'm'
+          const cur = LEVELS.find((n) => editor.isActive('heading', { level: n }))
           openMenu(
             { clientX: r.left, clientY: r.bottom + 6, preventDefault() {}, stopPropagation() {} },
-            (Object.keys(SIZE_LABEL) as NoteFontSize[]).map((k) => ({
-              label: SIZE_LABEL[k],
-              icon: k === cur ? 'check' : undefined,
-              onSelect: () => {
-                store.undo.stopCapturing()
-                // the selected text, or what's typed next at the caret; the menu took focus, so hand it back
-                if (k === 'm') c().unsetMark('textSize').run()
-                else c().setMark('textSize', { size: k }).run()
-              },
-            })),
+            [
+              { label: 'Normal text', icon: cur ? undefined : 'check', onSelect: () => c().setParagraph().run() },
+              ...LEVELS.map((n) => ({
+                label: `Heading ${n}`,
+                icon: n === cur ? 'check' : undefined,
+                onSelect: () => c().setHeading({ level: n }).run(),
+              })),
+            ],
           )
         }}
       >

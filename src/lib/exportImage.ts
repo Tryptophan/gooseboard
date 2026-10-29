@@ -1,5 +1,5 @@
 import { fragmentToHTML, fragmentToText } from '../model/noteSchema'
-import { NOTE_FONT_SIZES, type FileItem, type FolderItem, type Item, type LinkItem, type NoteItem, type StrokeItem } from '../model/types'
+import { NOTE_FONT_SIZE, type FileItem, type FolderItem, type Item, type LinkItem, type NoteItem, type StrokeItem } from '../model/types'
 import type { Session } from '../net/session'
 import { embedFor } from './embed'
 import { formatSize, kindOf } from './files'
@@ -118,7 +118,7 @@ export class ExportAssets {
     if (!p && fragment) {
       const box = document.createElement('div')
       box.className = 'box'
-      box.style.fontSize = `${NOTE_FONT_SIZES[item.fontSize ?? 'm']}px`
+      box.style.fontSize = `${NOTE_FONT_SIZE}px`
       const style = document.createElement('style')
       style.textContent = NOTE_CSS
       box.appendChild(style)
@@ -173,9 +173,9 @@ const NOTE_CSS = `
 .title + .prose { padding-top: 6px; }
 .prose { flex: 1; min-height: 0; overflow: hidden; padding: 12px 14px; line-height: 1.4; word-break: break-word; }
 .prose p { margin: 0 0 0.45em; }
-.prose h1, .prose h2, .prose h3 { margin: 0.1em 0 0.35em; line-height: 1.2; }
-.prose [data-size='s'] { font-size: 0.8em; } .prose [data-size='l'] { font-size: 1.27em; } .prose [data-size='xl'] { font-size: 1.67em; }
-.prose h1 { font-size: 1.5em; } .prose h2 { font-size: 1.3em; } .prose h3 { font-size: 1.12em; }
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 { margin: 0.1em 0 0.35em; line-height: 1.2; }
+.prose h1 { font-size: 2em; } .prose h2 { font-size: 1.6em; } .prose h3 { font-size: 1.3em; }
+.prose h4 { font-size: 1.12em; } .prose h5 { font-size: 1em; } .prose h6 { font-size: 0.88em; }
 .prose ul, .prose ol { margin: 0 0 0.45em; padding-left: 1.3em; }
 .prose ul[data-type='taskList'] { list-style: none; padding-left: 0.2em; }
 .prose ul[data-type='taskList'] > li { display: flex; gap: 0.5em; align-items: flex-start; }
@@ -349,7 +349,7 @@ function drawNote(d: Draw, it: NoteItem, rich: boolean) {
   const img = d.img(it.id)
   if (rich && img) return void ctx.drawImage(img, 0, 0, it.w, it.h)
   // plain text: the title, then the text wrapped to the note's width
-  const size = NOTE_FONT_SIZES[it.fontSize ?? 'm']
+  const size = NOTE_FONT_SIZE
   let y = 10
   if (it.title) {
     y += size * 1.15 * 1.1
