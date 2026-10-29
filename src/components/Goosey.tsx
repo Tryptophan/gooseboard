@@ -384,9 +384,10 @@ function Storage() {
           </button>
         </li>
         {usage !== null && previews !== null && thumbs !== null && (
-          <li title="Everything else this browser stores for Gooseboard: boards and their chat, folder listings, saved file handles, reminders, and the app itself. Approximate: browsers round the total.">
+          <li title="Boards, chat, reminders and the app itself (approximate)">
             <span>Other</span>
             <span className={c.muted}>{formatSize(Math.max(0, usage - (models ?? 0) - files.bytes - cache.bytes))}</span>
+            <span className={s.noButton} />
           </li>
         )}
       </ul>

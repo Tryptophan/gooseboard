@@ -60,6 +60,7 @@
 .segmented { display: flex; gap: 2px; padding: 3px; margin: 8px 0; border: 1px solid var(--border); border-radius: 10px; }
 .menu .stores li { font-family: inherit; font-size: 12.5px; padding: 2px 4px; }
 .stores li > span:first-child { flex: 1; }
+.stores .noButton { flex: none; width: 22px; }
 .stores button { width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
 .stores button:hover:not(:disabled) { background: var(--hover); color: var(--danger); }
 .stores button:disabled { opacity: 0.35; cursor: default; }
