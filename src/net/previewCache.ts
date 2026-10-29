@@ -13,20 +13,21 @@ try {
   /* no IndexedDB: nothing to clean up */
 }
 
-/** How many pictures are kept on disk, and their size. */
-export async function pictureStats(): Promise<{ count: number; bytes: number }> {
+/** How many previews are kept on disk, and their size. */
+export async function previewStats(): Promise<{ count: number; bytes: number }> {
   const all = await entries<string, Entry>(store).catch(() => [] as [string, Entry][])
   return { count: all.length, bytes: all.reduce((n, [, e]) => n + e.blob.size, 0) }
 }
 
-export const clearPictures = () => clear(store).catch(() => {})
+export const clearPreviews = () => clear(store).catch(() => {})
 
 /**
- * Pictures shown on the board, as object URLs. Thumbnails and previews share one cache.
+ * Pictures of other people's files shown on the board, as object URLs: the previews and thumbnails
+ * they serve us. (The thumbCache is the reverse, thumbnails of our own files that we serve.)
  * Entries marked `persist` are also kept in IndexedDB, so they survive a reload and an
  * offline owner. That copy has no size limit; only clearing it from Settings removes entries.
  */
-export class PictureCache {
+export class PreviewCache {
   private urls = new Map<string, Promise<string | null>>()
 
   /** `make` runs only when neither memory nor disk has the entry. Failures aren't cached. */

@@ -8,7 +8,7 @@ import { CanceledBy, type GetReq, type Handlers, type Meta, type P2P, type ReqHa
 import { CHUNK, type PartialCache } from './partial'
 import type { DirEntry } from './sources'
 import { openStream, type Stream } from './streamSW'
-import { PictureCache } from './pictureCache'
+import { PreviewCache } from './previewCache'
 import { makePreview } from './thumbs'
 import type { TransferStore } from './transfers'
 
@@ -82,7 +82,7 @@ function saveBlob(blob: Blob, name: string) {
 
 /** User-facing operations on remote files: thumbnails, directory listings, previews, downloads. */
 export class FileService {
-  private pictures = new PictureCache()
+  private previews = new PreviewCache()
   private shared = new Map<string, Shared>()
 
   constructor(
@@ -336,18 +336,18 @@ export class FileService {
    * `signal` (it scrolled away first) cancels the request, so the owner never makes it.
    */
   thumbURL(ownerId: string, key: string, kind: 'file' | 'dir', path?: string, signal?: AbortSignal): Promise<string | null> {
-    return this.pictures.url(`thumb\0${ownerId}\0${key}\0${path ?? ''}`, () =>
+    return this.previews.url(`thumb\0${ownerId}\0${key}\0${path ?? ''}`, () =>
       this.getBlob(ownerId, { op: 'thumb', kind, key, path }, undefined, { signal }),
     )
   }
 
   /**
-   * Object URL of an image's PREVIEW_DIM rendition. Kept in the picture cache's disk copy, so a
+   * Object URL of an image's PREVIEW_DIM rendition. Kept in the preview cache's disk copy, so a
    * board's pictures stay sharp after a reload and while their owner is offline. Made locally
    * from any copy we hold, otherwise by the owner or a holder.
    */
   imageURL(ownerId: string, key: string, hash?: string): Promise<string | null> {
-    return this.pictures.url(
+    return this.previews.url(
       `preview\0${ownerId}\0${key}`,
       async () => {
         const b = await this.getBlob(ownerId, { op: 'preview', kind: 'file', key, hash })
@@ -362,7 +362,7 @@ export class FileService {
    * the owner's own disk, or a kept copy), never from the network: null if there's none.
    */
   async localImage(ownerId: string, key: string, hash?: string): Promise<Blob | null> {
-    const cached = await this.pictures.peek(`preview\0${ownerId}\0${key}`)
+    const cached = await this.previews.peek(`preview\0${ownerId}\0${key}`)
     if (cached) return cached
     if (ownerId !== this.self.id && !(hash && this.mirror.has(hash, this.board))) return null
     // served locally, but a relink-pending file would wait for good
