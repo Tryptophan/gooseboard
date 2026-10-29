@@ -147,6 +147,8 @@ export function BoardSurface() {
   const [moving, setMoving] = useState(false)
   const [spaceDown, setSpaceDown] = useState(false)
   const space = useRef(false)
+  const spaceAt = useRef<Vec | null>(null) // last pointer position while space-panning
+  const [dragPan, setDragPan] = useState(false)
 
   // latest values for event handlers (they are bound once)
   const uiRef = useRef(ui)
@@ -435,6 +437,7 @@ export function BoardSurface() {
       host.setPointerCapture(e.pointerId)
       dispatch({ type: 'follow', clientId: null })
       inter.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, cam: { ...camApi.camRef.current } }
+      setDragPan(true)
       return
     }
     if (e.button !== 0) return
@@ -527,6 +530,13 @@ export function BoardSurface() {
     lastWorld.current = wp
     sendCursor(wp)
     const it = inter.current
+    if (space.current && !it && e.pointerType === 'mouse') {
+      // holding space pans with the pointer, no button needed
+      const prev = spaceAt.current
+      spaceAt.current = { x: e.clientX, y: e.clientY }
+      if (prev) camApi.panBy(e.clientX - prev.x, e.clientY - prev.y)
+      return
+    }
     if (!it || (it.kind !== 'pinch' && e.pointerId !== active.current.id)) return
     const z = camApi.camRef.current.z
 
@@ -714,6 +724,7 @@ export function BoardSurface() {
     if (e.pointerId !== active.current.id) return
     clearPress()
     inter.current = null
+    setDragPan(false)
     try {
       hostRef.current?.releasePointerCapture(e.pointerId)
     } catch {
@@ -1125,6 +1136,7 @@ export function BoardSurface() {
         e.preventDefault()
         if (!space.current) {
           space.current = true
+          spaceAt.current = null
           setSpaceDown(true)
         }
         return
@@ -1202,6 +1214,7 @@ export function BoardSurface() {
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key === ' ') {
         space.current = false
+        spaceAt.current = null
         setSpaceDown(false)
       }
     }
@@ -1224,7 +1237,7 @@ export function BoardSurface() {
   }, [store, camApi, dispatch, session, placeItem, pasteText, pasteFiles, clipText, afterCopy, previewIfPossible])
 
   const cursorClass =
-    spaceDown || ui.tool === 'hand' ? s.grab : ui.tool === 'pen' || ui.tool === 'eraser' ? s.crosshair : ui.tool === 'select' ? '' : s.place
+    spaceDown || dragPan ? s.grabbing : ui.tool === 'hand' ? s.grab : ui.tool === 'pen' || ui.tool === 'eraser' ? s.crosshair : ui.tool === 'select' ? '' : s.place
 
   const hostStyle = {
     '--z': cam.z,

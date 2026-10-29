@@ -14,6 +14,7 @@
 /* iOS can't place a caret in text whose ancestors are user-select: none */
 .host input, .host :global(.ProseMirror) { -webkit-user-select: text; user-select: text; }
 .grab { cursor: grab; }
+.grabbing, .grabbing * { cursor: grabbing !important; }
 .crosshair { cursor: crosshair; }
 .place { cursor: copy; }
 .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
