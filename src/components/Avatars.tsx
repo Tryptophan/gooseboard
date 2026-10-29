@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type RefObject } from 'react'
+import { useEffect, useId, useState, type ReactNode, type RefObject } from 'react'
 import type { PresenceUser } from '../model/types'
 import s from './Chrome.module.css'
 
@@ -28,12 +28,26 @@ export function useBudget(ref: RefObject<HTMLElement>, fraction: number): number
 
 /** The logo's goose, lowered so the top of its head sits two thirds of the way up the circle, drawn over the user's colour, with a yellow beak. */
 export function Goose({ color, accessory }: { color: string; accessory?: string }) {
+  const clip = useId()
+  const head = (
+    <>
+      <path d="M22 70V23a9 9 0 0 1 9-9c4 0 7 2 9 4l11 5.5c1 .5 1 1.5 0 2L40 29v41z" fill="#fff" />
+      <path d="M40 18l11 5.5c1 .5 1 1.5 0 2L40 29z" fill="#ffc53d" />
+      <circle cx="32" cy="21.5" r="2.2" fill="#1b2a4a" />
+    </>
+  )
   return (
     <svg viewBox="0 0 64 64" width="100%" height="100%" shapeRendering="geometricPrecision" aria-hidden>
-      <g transform="translate(0 7.33)" style={{ filter: 'drop-shadow(0 0.6px 1px rgba(0,0,0,0.35))' }}>
-        <path d="M22 70V23a9 9 0 0 1 9-9c4 0 7 2 9 4l11 5.5c1 .5 1 1.5 0 2L40 29v41z" fill="#fff" />
-        <path d="M40 18l11 5.5c1 .5 1 1.5 0 2L40 29z" fill="#ffc53d" />
-        <circle cx="32" cy="21.5" r="2.2" fill="#1b2a4a" />
+      <clipPath id={clip}>
+        <rect x="0" y="0" width="64" height="30" />
+      </clipPath>
+      <g transform="translate(0 7.33)">
+        {/* the shadow is cast by the head and accessory only; the neck runs off the circle, so a shadow down both its sides reads as stray lines */}
+        <g style={{ filter: 'drop-shadow(0 0.6px 1px rgba(0,0,0,0.35))' }}>
+          <g clipPath={`url(#${clip})`}>{head}</g>
+          <Accessory kind={accessory} />
+        </g>
+        {head}
         <Accessory kind={accessory} />
       </g>
     </svg>
