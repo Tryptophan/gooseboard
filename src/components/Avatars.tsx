@@ -30,7 +30,7 @@ export function useBudget(ref: RefObject<HTMLElement>, fraction: number): number
 export function Goose({ color, accessory }: { color: string; accessory?: string }) {
   return (
     <svg viewBox="0 0 64 64" width="100%" height="100%" shapeRendering="geometricPrecision" aria-hidden>
-      <g transform="translate(0 7.33)">
+      <g transform="translate(0 7.33)" style={{ filter: 'drop-shadow(0 0.6px 1px rgba(0,0,0,0.35))' }}>
         <path d="M22 70V23a9 9 0 0 1 9-9c4 0 7 2 9 4l11 5.5c1 .5 1 1.5 0 2L40 29v41z" fill="#fff" />
         <path d="M40 18l11 5.5c1 .5 1 1.5 0 2L40 29z" style={{ fill: `color-mix(in srgb, ${color} 55%, black)` }} />
         <circle cx="32" cy="21.5" r="2.2" fill="#1b2a4a" />
@@ -55,89 +55,77 @@ export function AccessoryIcon({ kind }: { kind: string }) {
           <path d="M7 17L17 7" />
         </g>
       ) : (
-        <AccessoryShape kind={kind} />
+        <Shape kind={kind} />
       )}
     </svg>
   )
 }
 
-/** Drawn over the goose's head (top of the neck at x 22-40, crown at y 14); fixed colours, outlined so they show on any background. */
+/** Drawn over the goose's head (top of the neck at x 22-40, crown at y 14); fixed colours. */
 function Accessory({ kind }: { kind?: string }) {
   // hats sit down over the crown rather than perched on it
   const hat = kind === 'tophat' || kind === 'partyhat' || kind === 'beanie' || kind === 'crown' || kind === 'cowboy'
   // the goose faces right, so tilting the hat anticlockwise leans it back
-  return <g transform={hat ? `translate(${kind === 'crown' ? -1 : kind === 'partyhat' || kind === 'tophat' ? -1 : kind === 'cowboy' ? -1.5 : kind === 'beanie' ? -1 : 0} ${kind === 'cowboy' ? 1.5 : kind === 'beanie' ? 2 : 2.5}) rotate(-12 31 15)` : kind === 'bow' ? 'translate(0 2.5)' : kind === 'scarf' ? 'translate(0 2)' : undefined}><AccessoryShape kind={kind} /></g>
+  return <g transform={hat ? `translate(${kind === 'crown' ? -1 : kind === 'partyhat' || kind === 'tophat' ? -1 : kind === 'cowboy' ? -1.5 : kind === 'beanie' ? -1 : 0} ${kind === 'cowboy' ? 1.5 : kind === 'beanie' ? 2 : 2.5}) rotate(-12 31 15)` : kind === 'bow' ? 'translate(0 2.5)' : kind === 'scarf' ? 'translate(0 2)' : undefined}><Shape kind={kind} /></g>
 }
 
-/** Drawn twice: a solid white silhouette slightly fattened, then the colours on top. One clean halo antialiases far better than a hairline stroke on every shape. */
-function AccessoryShape({ kind }: { kind?: string }) {
-  return (
-    <>
-      <Shape kind={kind} halo />
-      <Shape kind={kind} />
-    </>
-  )
-}
-
-function Shape({ kind, halo }: { kind?: string; halo?: boolean }) {
-  const f = (c: string) => (halo ? '#fff' : c)
-  const line = halo ? ({ stroke: '#fff', strokeWidth: 2.6, strokeLinejoin: 'round' } as const) : {}
+function Shape({ kind }: { kind?: string }) {
   switch (kind) {
     case 'tophat':
       return (
-        <g {...line}>
-          <rect x="24.5" y="2" width="13" height="11" rx="1" fill={f('#1b2a4a')} />
-          <rect x="25.5" y="8.5" width="11" height="2.5" fill={f('#e5484d')} />
-          <rect x="20" y="12" width="22" height="3.2" rx="1.4" fill={f('#1b2a4a')} />
+        <g>
+          <rect x="24.5" y="2" width="13" height="11" rx="1" fill={'#1b2a4a'} />
+          <rect x="25.5" y="8.5" width="11" height="2.5" fill={'#e5484d'} />
+          <rect x="20" y="12" width="22" height="3.2" rx="1.4" fill={'#1b2a4a'} />
         </g>
       )
     case 'cowboy':
       return (
-        <g {...line}>
-          <path d="M23.5 14L24.5 6Q25 3 28 3.5Q31 5.5 34 3.5Q37 3 37.5 6L38.5 14z" fill={f('#b8763a')} />
-          <path d="M24 10.6Q31 12.4 38 10.6L38.3 13Q31 14.8 23.7 13z" fill={f('#5a3418')} />
-          <rect x="15.5" y="12.8" width="31" height="3.4" rx="1.7" fill={f('#8f5a2b')} />
+        <g>
+          <path d="M23.5 14L24.5 6Q25 3 28 3.5Q31 5.5 34 3.5Q37 3 37.5 6L38.5 14z" fill={'#b8763a'} />
+          <path d="M24 10.6Q31 12.4 38 10.6L38.3 13Q31 14.8 23.7 13z" fill={'#5a3418'} />
+          <rect x="15.5" y="12.8" width="31" height="3.4" rx="1.7" fill={'#8f5a2b'} />
         </g>
       )
     case 'scarf':
       return (
-        <g {...line}>
-          <path d="M36 33h5v13a2.5 2.5 0 0 1-5 0z" fill={f('#e5484d')} />
-          <rect x="20" y="28" width="22" height="8" rx="3.5" fill={f('#e5484d')} />
+        <g>
+          <path d="M36 33h5v13a2.5 2.5 0 0 1-5 0z" fill={'#e5484d'} />
+          <rect x="20" y="28" width="22" height="8" rx="3.5" fill={'#e5484d'} />
           <path d="M26 28.5v7M32 28.5v7" stroke="#fff" strokeWidth="2" fill="none" />
         </g>
       )
     case 'partyhat':
       return (
-        <g {...line}>
-          <path d="M23.5 15L31 0.5L38.5 15z" fill={f('#8e4ec6')} />
+        <g>
+          <path d="M23.5 15L31 0.5L38.5 15z" fill={'#8e4ec6'} />
           {/* bands follow the cone: ends on its edges, curving round the front */}
-          <path d="M28.41 5.5Q31 7.3 33.59 5.5L34.62 7.5Q31 9.3 27.38 7.5z" fill={f('#ffd43b')} />
-          <path d="M26.34 9.5Q31 11.3 35.66 9.5L36.69 11.5Q31 13.3 25.31 11.5z" fill={f('#ffd43b')} />
-          <circle cx="31" cy="1.5" r="2.2" fill={f('#ffd43b')} />
+          <path d="M28.41 5.5Q31 7.3 33.59 5.5L34.62 7.5Q31 9.3 27.38 7.5z" fill={'#ffd43b'} />
+          <path d="M26.34 9.5Q31 11.3 35.66 9.5L36.69 11.5Q31 13.3 25.31 11.5z" fill={'#ffd43b'} />
+          <circle cx="31" cy="1.5" r="2.2" fill={'#ffd43b'} />
         </g>
       )
     case 'beanie':
       return (
-        <g {...line}>
-          <path d="M22 13a9 9 0 0 1 18 0z" fill={f('#3e63dd')} />
-          <rect x="21" y="11.5" width="20" height="4.5" rx="1.8" fill={f('#9db4ff')} />
-          <circle cx="31" cy="3.2" r="2.8" fill={f('#9db4ff')} />
+        <g>
+          <path d="M22 13a9 9 0 0 1 18 0z" fill={'#3e63dd'} />
+          <rect x="21" y="11.5" width="20" height="4.5" rx="1.8" fill={'#9db4ff'} />
+          <circle cx="31" cy="3.2" r="2.8" fill={'#9db4ff'} />
         </g>
       )
     case 'crown':
       return (
-        <g {...line}>
-          <path d="M22.5 14.5L21.5 4l5.5 4.5L31 2l4 6.5L40.5 4l-1 10.5z" fill={f('#ffc53d')} />
-          <circle cx="31" cy="10" r="1.4" fill={f('#e5484d')} />
+        <g>
+          <path d="M22.5 14.5L21.5 4l5.5 4.5L31 2l4 6.5L40.5 4l-1 10.5z" fill={'#ffc53d'} />
+          <circle cx="31" cy="10" r="1.4" fill={'#e5484d'} />
         </g>
       )
     case 'bow':
       return (
-        <g {...line}>
-          <path d="M31 33L20 28v10z" fill={f('#f76bb0')} />
-          <path d="M31 33L42 28v10z" fill={f('#f76bb0')} />
-          <rect x="28.8" y="30.5" width="4.4" height="5" rx="1.4" fill={f('#d6409f')} />
+        <g>
+          <path d="M31 33L20 28v10z" fill={'#f76bb0'} />
+          <path d="M31 33L42 28v10z" fill={'#f76bb0'} />
+          <rect x="28.8" y="30.5" width="4.4" height="5" rx="1.4" fill={'#d6409f'} />
         </g>
       )
     default:
