@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { leaveLayers } from '../lib/back'
-import { renameBoardLocal, saveProfile, USER_COLORS } from '../lib/storage'
+import { ACCESSORIES, ACCESSORY_LABELS, renameBoardLocal, saveProfile, USER_COLORS } from '../lib/storage'
 import { useUpdateReady } from '../net/pwa'
 import { signalStatus } from '../net/signal'
 import { usePeers, useSession } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
 import { shareDialog } from './Dialog'
-import { fitAvatars, Goose, MoreChip, useBudget } from './Avatars'
+import { AccessoryIcon, fitAvatars, Goose, MoreChip, useBudget } from './Avatars'
 import { Icon } from './Icons'
 import { QrLinkDialog } from './QrLink'
 import s from './Chrome.module.css'
@@ -246,7 +246,7 @@ export function TopBar({ boardId }: { boardId: string }) {
               onClick={() => clickPeer(p)}
               data-me-toggle={p.isSelf || undefined}
             >
-              <Goose color={p.color} />
+              <Goose color={p.color} accessory={p.accessory} />
             </button>
           ))}
           {shown < peers.length && <MoreChip hidden={peers.slice(shown).map((p) => p.name)} onClick={() => setShowMore(!showMore)} />}
@@ -265,7 +265,7 @@ export function TopBar({ boardId }: { boardId: string }) {
             {peers.map((p) => (
               <li key={p.clientId}>
                 <button className={ui.follow === p.clientId ? s.following : ''} onClick={() => clickPeer(p)} data-me-toggle={p.isSelf || undefined}>
-                  <span className={s.avatar} style={{ background: p.color }}><Goose color={p.color} /></span>
+                  <span className={s.avatar} style={{ background: p.color }}><Goose color={p.color} accessory={p.accessory} /></span>
                   <span className={s.peerName}>{p.name}</span>
                   <span className={s.muted}>{p.isSelf ? 'you' : ui.follow === p.clientId ? 'following' : ''}</span>
                 </button>
@@ -278,20 +278,42 @@ export function TopBar({ boardId }: { boardId: string }) {
       {showMe && me && (
         <div className={`${s.popover} ${s.mePop}`} data-nodrag ref={meRef}>
           <b>Your profile</b>
-          <input
-            value={me.name}
-            maxLength={24}
-            onChange={(e) => {
-              updateProfile({ name: e.target.value })
-            }}
-            onKeyDown={(e) => {
-              e.stopPropagation()
-              if (e.key === 'Enter') setShowMe(false)
-            }}
-          />
+          <div className={s.meRow}>
+            <span className={s.mePreview} style={{ background: me.color }}>
+              <Goose color={me.color} accessory={me.accessory} />
+            </span>
+            <label className={s.meName}>
+              <input
+                value={me.name}
+                maxLength={24}
+                aria-label="Display name"
+                onChange={(e) => {
+                  updateProfile({ name: e.target.value })
+                }}
+                onKeyDown={(e) => {
+                  e.stopPropagation()
+                  if (e.key === 'Enter') setShowMe(false)
+                }}
+              />
+            </label>
+          </div>
           <div className={s.swatches}>
             {USER_COLORS.map((c) => (
               <button key={c} className={`${s.swatch} ${me.color === c ? s.swatchOn : ''}`} style={{ background: c }} onClick={() => updateProfile({ color: c })} aria-label={c} />
+            ))}
+          </div>
+          <div className={s.swatches}>
+            {ACCESSORIES.map((a) => (
+              <button
+                key={a}
+                className={`${s.swatch} ${s.accChip} ${me.accessory === a ? s.swatchOn : ''}`}
+                onClick={() => updateProfile({ accessory: a })}
+                title={ACCESSORY_LABELS[a]}
+                aria-label={ACCESSORY_LABELS[a]}
+                aria-pressed={me.accessory === a}
+              >
+                <AccessoryIcon kind={a} />
+              </button>
             ))}
           </div>
           <p className={s.muted}>Saved in this browser only. No account needed.</p>

@@ -81,7 +81,7 @@ export class BoardStore {
     })
 
     this.awareness.setLocalState({
-      user: { id: profile.id, name: profile.name, color: profile.color },
+      user: { id: profile.id, name: profile.name, color: profile.color, accessory: profile.accessory },
       cursor: null,
       view: null,
       draft: null,
@@ -316,7 +316,7 @@ export class BoardStore {
   }
 
   setProfile(p: Profile) {
-    this.setPresence({ user: { id: p.id, name: p.name, color: p.color } })
+    this.setPresence({ user: { id: p.id, name: p.name, color: p.color, accessory: p.accessory } })
   }
 
   destroy() {

@@ -48,6 +48,12 @@
 .mePop { right: calc(12px + var(--sar)); width: 260px; }
 .muted { color: var(--muted); }
 .swatches { display: flex; flex-wrap: wrap; gap: 4px; }
+.meRow { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.meName { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mePop .meName input:not([type]) { margin: 0; }
+.mePop .swatches { justify-content: space-between; }
+.swatches + .swatches { margin-top: 10px; }
+.mePreview { width: 44px; height: 44px; border-radius: 50%; overflow: hidden; flex: none; }
 
 .toolbarWrap { position: fixed; z-index: 30; bottom: calc(16px + var(--sab)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: calc(100vw - 16px); }
 .toolbar { display: flex; align-items: center; gap: 2px; padding: 6px; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); overflow-x: auto; max-width: 100%; }
@@ -65,6 +71,7 @@
 .brush { display: flex; align-items: center; gap: 4px; padding: 6px 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); flex-wrap: wrap; justify-content: center; }
 .swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border); padding: 0; cursor: pointer; flex: none; }
 .swatchOn { box-shadow: 0 0 0 2px var(--accent); }
+.accChip { background: var(--hover); color: var(--text); display: grid; place-items: center; overflow: hidden; }
 .rainbow { background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red); position: relative; overflow: hidden; }
 .range { width: 100px; margin: 0 6px; accent-color: var(--accent); }
 .dotPreview { border-radius: 50%; display: inline-block; max-width: 40px; max-height: 40px; }

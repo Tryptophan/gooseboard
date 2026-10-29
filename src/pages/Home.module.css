@@ -42,8 +42,15 @@
 .profile p { color: var(--muted); margin: 0 0 10px; }
 .profileRow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .profileRow input { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); flex: 1; min-width: 200px; }
-.me { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; flex: none; }
+.me { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; flex: none; }
 .sw { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--border); cursor: pointer; padding: 0; }
+.editor { gap: 24px; align-items: flex-start; flex-wrap: nowrap; }
+/* the chip rows set the width of this column; the name field follows it */
+.fields { flex: none; width: fit-content; max-width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.fields .profileRow { gap: 6px; flex-wrap: nowrap; }
+.nameField { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.nameField input { flex: none; width: 0; min-width: 100%; }
+.acc { background: var(--panel); color: var(--text); display: grid; place-items: center; overflow: hidden; }
 .swOn { box-shadow: 0 0 0 2px var(--accent); }
 .sub { margin: 22px 0 4px; font-size: 14px; }
 .reminders p { margin: 0; }
@@ -63,7 +70,9 @@
   .list .open { flex-basis: 100%; }
   .online { flex-basis: 50%; }
   /* the name fills the line beside the avatar; the colors wrap below */
-  .profileRow input { flex: 1 1 calc(100% - 44px); min-width: 0; }
+  .profileRow input { flex: 1 1 0; min-width: 0; }
+  .nameField input { flex: none; min-width: 100%; }
+  .editor { flex-direction: column; gap: 14px; }
 }
 
 /* the share target's board picker (Share.tsx) */

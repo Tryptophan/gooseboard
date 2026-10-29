@@ -1,9 +1,17 @@
 import { newUserId } from './ids'
 
+export const ACCESSORIES = ['none', 'tophat', 'cowboy', 'scarf', 'partyhat', 'beanie', 'crown', 'bow'] as const
+export type Accessory = (typeof ACCESSORIES)[number]
+
+export const ACCESSORY_LABELS: Record<Accessory, string> = {
+  none: 'None', tophat: 'Top hat', cowboy: 'Cowboy hat', scarf: 'Scarf', partyhat: 'Party hat', beanie: 'Beanie', crown: 'Crown', bow: 'Bowtie',
+}
+
 export interface Profile {
   id: string
   name: string
   color: string
+  accessory?: Accessory
 }
 
 export interface BoardEntry {
@@ -48,7 +56,7 @@ const NOUN = ['Goose', 'Gander', 'Gosling', 'Honker', 'Waddler']
 
 function randomProfile(): Profile {
   const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)]
-  return { id: newUserId(), name: `${pick(ADJ)} ${pick(NOUN)}`, color: pick(USER_COLORS) }
+  return { id: newUserId(), name: `${pick(ADJ)} ${pick(NOUN)}`, color: pick(USER_COLORS), accessory: pick([...ACCESSORIES]) }
 }
 
 let cachedProfile: Profile | null = null
@@ -59,13 +67,20 @@ export function getProfile(): Profile {
   if (!p || !p.id) {
     p = randomProfile()
     write(K.profile, p)
+  } else if ((p.accessory as string) === 'headphones') {
+    p.accessory = 'cowboy'
+    write(K.profile, p)
+  } else if (!p.accessory) {
+    // profiles saved before accessories existed get a random one, once
+    p.accessory = ACCESSORIES[Math.floor(Math.random() * ACCESSORIES.length)]
+    write(K.profile, p)
   }
   cachedProfile = p
   return p
 }
 
 /** Mutates the shared profile object in place so long-lived holders (sessions, P2P) see the change. */
-export function saveProfile(patch: Partial<Pick<Profile, 'name' | 'color'>>): Profile {
+export function saveProfile(patch: Partial<Pick<Profile, 'name' | 'color' | 'accessory'>>): Profile {
   const p = Object.assign(getProfile(), patch)
   write(K.profile, p)
   return p

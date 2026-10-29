@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { ROOM_PREFIX } from '../config'
 import { newBoardId, parseBoardRef } from '../lib/ids'
 import { gcPreviews } from '../net/previewCache'
-import { forgetBoard, getBoards, getProfile, renameBoardLocal, renameBoardPending, saveProfile, touchBoard, USER_COLORS, type BoardEntry } from '../lib/storage'
+import { forgetBoard, getBoards, getProfile, renameBoardLocal, renameBoardPending, saveProfile, touchBoard, USER_COLORS, ACCESSORIES, ACCESSORY_LABELS, type BoardEntry } from '../lib/storage'
 import type { PresenceUser } from '../model/types'
 import { watchPresence } from '../net/presence'
-import { AvatarStack, Goose, useBudget } from '../components/Avatars'
+import { AccessoryIcon, AvatarStack, Goose, useBudget } from '../components/Avatars'
 import { confirmDialog, copyDialog, promptDialog } from '../components/Dialog'
 import { Icon } from '../components/Icons'
 import { QrLinkDialog } from '../components/QrLink'
@@ -69,6 +69,18 @@ export default function Home() {
       const h1 = el.querySelector('h1')!
       setLogo(Math.round(matchMedia('(max-width: 560px)').matches ? h1.offsetHeight : el.offsetHeight))
     }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  // the profile preview is as tall as the fields beside it
+  const fieldsRef = useRef<HTMLDivElement>(null)
+  const [previewSize, setPreviewSize] = useState(96)
+  useLayoutEffect(() => {
+    const el = fieldsRef.current
+    if (!el) return
+    const fit = () => setPreviewSize(Math.min(el.offsetHeight, 140))
     fit()
     const ro = new ResizeObserver(fit)
     ro.observe(el)
@@ -210,25 +222,45 @@ export default function Home() {
       <section className={s.profile}>
         <h2 className={s.sectionTitle}>You</h2>
         <p>No accounts. Your name and color live in this browser and show on your cursor.</p>
-        <div className={s.profileRow}>
-          <span className={s.me} style={{ background: profile.color }} title="How you look to others">
-            <Goose color={profile.color} />
+        <div className={`${s.profileRow} ${s.editor}`}>
+          <span className={s.me} style={{ background: profile.color, width: previewSize, height: previewSize }} title="How you look to others">
+            <Goose color={profile.color} accessory={profile.accessory} />
           </span>
-          <input
-            value={profile.name}
-            maxLength={24}
-            onChange={(e) => setProfile({ ...saveProfile({ name: e.target.value }) })}
-            aria-label="Display name"
-          />
-          {USER_COLORS.map((c) => (
-            <button
-              key={c}
-              className={`${s.sw} ${profile.color === c ? s.swOn : ''}`}
-              style={{ background: c }}
-              onClick={() => setProfile({ ...saveProfile({ color: c }) })}
-              aria-label={`Color ${c}`}
-            />
-          ))}
+          <div className={s.fields} ref={fieldsRef}>
+            <label className={s.nameField}>
+              <input
+                value={profile.name}
+                maxLength={24}
+                aria-label="Display name"
+                onChange={(e) => setProfile({ ...saveProfile({ name: e.target.value }) })}
+              />
+            </label>
+            <div className={s.profileRow}>
+              {USER_COLORS.map((c) => (
+                <button
+                  key={c}
+                  className={`${s.sw} ${profile.color === c ? s.swOn : ''}`}
+                  style={{ background: c }}
+                  onClick={() => setProfile({ ...saveProfile({ color: c }) })}
+                  aria-label={`Color ${c}`}
+                />
+              ))}
+            </div>
+            <div className={s.profileRow}>
+              {ACCESSORIES.map((a) => (
+                <button
+                  key={a}
+                  className={`${s.sw} ${s.acc} ${profile.accessory === a ? s.swOn : ''}`}
+                  onClick={() => setProfile({ ...saveProfile({ accessory: a }) })}
+                  title={ACCESSORY_LABELS[a]}
+                  aria-label={ACCESSORY_LABELS[a]}
+                  aria-pressed={profile.accessory === a}
+                >
+                  <AccessoryIcon kind={a} />
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         <h3 className={s.sub}>Reminders</h3>
         <div className={s.reminders}>

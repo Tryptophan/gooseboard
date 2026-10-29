@@ -56,7 +56,7 @@ function open(id: string): Room {
       provider.awareness.getStates().forEach((st, clientId) => {
         const { user: u, board } = st as { user?: PresenceUser; board?: unknown }
         if (clientId !== doc.clientID && typeof board === 'string' && board && !name) name = board.slice(0, 200)
-        if (clientId !== doc.clientID && u?.id && !seen.has(u.id)) seen.set(u.id, { id: u.id, name: String(u.name ?? ''), color: String(u.color ?? '') })
+        if (clientId !== doc.clientID && u?.id && !seen.has(u.id)) seen.set(u.id, { id: u.id, name: String(u.name ?? ''), color: String(u.color ?? ''), accessory: u.accessory })
       })
       room.users = [...seen.values()]
       room.name = name
@@ -104,7 +104,7 @@ function close(id: string) {
 function announce(r: Room) {
   const h = r.here[r.here.length - 1]
   const p = h?.profile
-  r.provider.awareness.setLocalState(p ? { user: { id: p.id, name: p.name, color: p.color }, board: h.name() } : null)
+  r.provider.awareness.setLocalState(p ? { user: { id: p.id, name: p.name, color: p.color, accessory: p.accessory }, board: h.name() } : null)
 }
 
 /** Board sessions: show this person (and the board's name) as on the board until released. */

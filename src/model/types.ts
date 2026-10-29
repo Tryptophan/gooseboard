@@ -92,6 +92,7 @@ export interface PresenceUser {
   id: string
   name: string
   color: string
+  accessory?: string
 }
 
 export interface Presence {
