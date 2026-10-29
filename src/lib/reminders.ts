@@ -1,3 +1,4 @@
+import { createStore, get, set } from 'idb-keyval'
 import { diag, diagSecrets, diagSection } from './diag'
 import { toast } from './toast'
 
@@ -20,6 +21,8 @@ export interface Reminder {
   days?: number[]
   /** when it goes off next; null once a one-off has gone off */
   next: number | null
+  /** a one-off that went off late, because nothing was open at its time */
+  missed?: boolean
   /** the board it was made on, opened from its notification */
   board?: { id: string; name: string }
 }
@@ -33,6 +36,13 @@ export const REPEATS: { id: Repeat; label: string }[] = [
 ]
 
 const KEY = 'gooseboard:reminders'
+/** when the list was last saved: the newer of localStorage and IndexedDB wins at startup */
+const REV = 'gooseboard:reminders-rev'
+/**
+ * A second copy in IndexedDB. Chrome writes localStorage to disk a while after it's set, so a
+ * phone app closed by force soon after adding a reminder could lose it.
+ */
+const durable = createStore('gooseboard-reminders', 'reminders')
 /** later than this is "missed" rather than just a slow timer */
 const LATE = 2 * 60_000
 /** how often to look even with nothing due soon: sleep and clock changes don't move timers */
@@ -54,8 +64,11 @@ function load(): Reminder[] {
 
 function save(next: Reminder[]) {
   list = sorted(next)
+  const rev = Date.now()
+  void set('list', { rev, list: next }, durable).catch(() => {})
   try {
     localStorage.setItem(KEY, JSON.stringify(next))
+    localStorage.setItem(REV, String(rev))
   } catch {
     /* storage unavailable or full: they last for this session */
   }
@@ -112,7 +125,8 @@ export function nextTime(r: Pick<Reminder, 'at' | 'repeat' | 'days'>, after: num
 }
 
 export function saveReminder(r: Omit<Reminder, 'id' | 'next'> & { id?: string }) {
-  const full: Reminder = { ...r, id: r.id ?? crypto.randomUUID(), next: nextTime(r, Date.now()) }
+  // saving one re-arms it, so it's no longer missed
+  const full: Reminder = { ...r, id: r.id ?? crypto.randomUUID(), next: nextTime(r, Date.now()), missed: undefined }
   const rest = load().filter((x) => x.id !== full.id)
   save([...rest, full])
   diag('reminder', r.id ? 'edited' : 'added', { repeat: r.repeat, inMs: full.next && full.next - Date.now() })
@@ -163,10 +177,10 @@ async function notify(r: Reminder, due: number, missed: boolean) {
     try {
       // through the service worker where there is one: Android has no page-made notifications
       const reg = await navigator.serviceWorker?.getRegistration()
-      if (reg) return await reg.showNotification(r.text, opts)
-      const n = new Notification(r.text, opts)
-      n.onclick = () => openFor(r)
-      return
+      if (reg) await reg.showNotification(r.text, opts)
+      else new Notification(r.text, opts).onclick = () => openFor(r)
+      // one found missed on opening the app is shown here too: it's what you're looking at
+      if (!missed) return
     } catch (e) {
       diag('reminder', 'notification failed', e)
     }
@@ -183,9 +197,11 @@ async function check() {
     const due: [Reminder, number][] = []
     for (const r of fresh) {
       if (r.next === null || r.next > now) continue
-      due.push([r, r.next])
+      const t = r.next
+      due.push([r, t])
       // a repeat missed many times goes off once, then waits for its next time from now
       r.next = nextTime(r, now)
+      if (r.next === null && now - t > LATE) r.missed = true
     }
     if (due.length) save(fresh)
     return due
@@ -224,5 +240,28 @@ export function startReminders() {
   })
   diagSection('reminders', () => ({ count: list.length, active: list.filter((r) => r.next !== null).length, notifications: notifyState() }))
   diagSecrets(() => list.flatMap((r) => [r.text, r.board?.id, r.board?.name]))
-  void check().finally(schedule)
+  void restore()
+    .then(check)
+    .finally(schedule)
+}
+
+/** Takes the IndexedDB copy if it's newer than localStorage's (which lost its last writes). */
+async function restore() {
+  const d = await get<{ rev: number; list: Reminder[] }>('list', durable).catch(() => undefined)
+  let rev = 0
+  try {
+    rev = Number(localStorage.getItem(REV) ?? 0)
+  } catch {
+    /* unavailable: IndexedDB's copy is all there is */
+  }
+  if (!d || !Array.isArray(d.list) || d.rev <= rev) return
+  diag('reminder', 'restored from IndexedDB', { count: d.list.length })
+  try {
+    localStorage.setItem(KEY, JSON.stringify(d.list))
+    localStorage.setItem(REV, String(d.rev))
+  } catch {
+    /* kept in memory for this session */
+  }
+  list = sorted(d.list)
+  emit()
 }

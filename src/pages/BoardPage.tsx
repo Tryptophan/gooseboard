@@ -13,6 +13,7 @@ import { RelinkBanner, useLeaveGuard } from '../components/TransferPanel'
 import { unionBounds } from '../lib/geometry'
 import { isValidBoardId } from '../lib/ids'
 import { loadCamera, saveCamera, takePendingName, touchBoard } from '../lib/storage'
+import { useCoarse, useWakeLock } from '../lib/touch'
 import { acquireSession, releaseSession, type Session } from '../net/session'
 import { CameraProvider, useCamera } from '../state/camera'
 import { SessionProvider, useSnapshot } from '../state/session'
@@ -59,6 +60,8 @@ function BoardLoader({ id }: { id: string }) {
 function Board({ id }: { id: string }) {
   const initial = useMemo(() => loadCamera(id), [id])
   useLeaveGuard()
+  // on a phone or tablet the screen stays on while a board is open
+  useWakeLock(useCoarse())
   return (
     <CameraProvider initial={initial}>
       <PreviewProvider>

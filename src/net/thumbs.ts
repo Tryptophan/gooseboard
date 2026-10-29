@@ -50,7 +50,7 @@ const isImageFile = (file: { type: string; name?: string }) => file.type.startsW
 /** formats that can be see-through: their previews keep the alpha channel */
 const mayHaveAlpha = (file: { type: string; name?: string }) => /png|gif|webp|svg|avif/i.test(file.type || file.name || '')
 
-const isVideoFile = (file: { type: string; name?: string }) => file.type.startsWith('video/') || /\.(mp4|webm|mov|m4v)$/i.test(file.name ?? '')
+const isVideoFile = (file: { type: string; name?: string }) => file.type.startsWith('video/') || /\.(mp4|webm|mov|m4v|3gp|mkv)$/i.test(file.name ?? '')
 
 /** Natural pixel size of an image or video file, or null if it isn't one or won't decode. */
 export async function mediaSize(file: File): Promise<{ w: number; h: number } | null> {
@@ -63,24 +63,53 @@ export async function mediaSize(file: File): Promise<{ w: number; h: number } | 
   return null
 }
 
-async function videoSize(file: File): Promise<{ w: number; h: number } | null> {
+/**
+ * Runs `run` on `file` loaded into a <video>. Phone browsers (iOS Safari above all) often never load
+ * a video that isn't in the page, so it sits off-screen in the page until `run` is done.
+ */
+async function withVideo<T>(file: File, run: (v: HTMLVideoElement) => Promise<T>, ms = 20000): Promise<T> {
   const url = URL.createObjectURL(file)
+  const v = document.createElement('video')
+  v.muted = true
+  v.playsInline = true
+  v.setAttribute('playsinline', '')
+  v.preload = 'auto'
+  v.style.cssText = 'position:fixed;left:-10px;top:-10px;width:2px;height:2px;opacity:0;pointer-events:none'
+  document.body.appendChild(v)
   try {
-    const v = document.createElement('video')
-    v.muted = true
-    v.preload = 'metadata'
     v.src = url
+    v.load()
     await withTimeout(
       new Promise<void>((res, rej) => {
+        if (v.readyState >= 1) return res()
         v.onloadedmetadata = () => res()
         v.onerror = () => rej(new Error('video'))
       }),
-      10000,
+      ms,
     )
-    return v.videoWidth && v.videoHeight ? { w: v.videoWidth, h: v.videoHeight } : null
+    return await withTimeout(run(v), ms)
   } finally {
+    v.removeAttribute('src')
+    v.load()
+    v.remove()
     URL.revokeObjectURL(url)
   }
+}
+
+const videoSize = (file: File) => withVideo(file, async (v) => (v.videoWidth && v.videoHeight ? { w: v.videoWidth, h: v.videoHeight } : null))
+
+/**
+ * Resolves once a frame at the current time can be drawn: when one is presented, or after a moment
+ * (a video kept off-screen may never present one, though it has decoded it).
+ */
+function frameReady(v: HTMLVideoElement): Promise<void> {
+  const rvfc = (v as any).requestVideoFrameCallback?.bind(v)
+  return new Promise((res) => {
+    setTimeout(res, 800)
+    if (rvfc) rvfc(() => res())
+    else if (v.readyState >= 2) res()
+    else v.onloadeddata = () => res()
+  })
 }
 
 /** Pixel size of a data: URL thumbnail, for media added before sizes were recorded. */
@@ -108,27 +137,14 @@ export async function makePreview(file: Blob, name = ''): Promise<Blob | null> {
 }
 
 async function videoThumb(file: File, maxDim: number): Promise<Blob | null> {
-  const url = URL.createObjectURL(file)
-  try {
-    const v = document.createElement('video')
-    v.muted = true
-    v.preload = 'auto'
-    v.playsInline = true
-    v.src = url
-    await withTimeout(
-      new Promise<void>((res, rej) => {
-        v.onloadeddata = () => {
-          v.onseeked = () => res()
-          v.currentTime = Math.min(1, (v.duration || 2) * 0.1)
-        }
-        v.onerror = () => rej(new Error('video'))
-      }),
-      10000,
-    )
-    return await canvasToBlob(drawScaled(v, v.videoWidth || 320, v.videoHeight || 180, maxDim), 0.72)
-  } finally {
-    URL.revokeObjectURL(url)
-  }
+  return withVideo(file, async (v) => {
+    await new Promise<void>((res) => {
+      v.onseeked = () => res()
+      v.currentTime = Math.min(1, (v.duration || 2) * 0.1)
+    })
+    await frameReady(v)
+    return canvasToBlob(drawScaled(v, v.videoWidth || 320, v.videoHeight || 180, maxDim), 0.72)
+  })
 }
 
 /** Small JPEG preview for images and videos; null for everything else (UI shows a type icon). */

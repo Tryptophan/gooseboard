@@ -4,6 +4,7 @@ import { FRAME_SIZE, HIGH_WATER, LOW_WATER } from '../config'
 import { mimeOf } from '../lib/files'
 import type { Profile } from '../lib/storage'
 import type { Mirror } from './mirror'
+import type { PartialCache } from './partial'
 import { dropIfStuck, fixGlare } from './signal/glare'
 import type { LocalSources } from './sources'
 import { makePreview, makeThumb } from './thumbs'
@@ -16,6 +17,7 @@ import type { TransferStore } from './transfers'
  * y-webrtc sees them. Bytes are read from the owner's disk on demand: never stored in the doc.
  * Peers that hold a copy (see Mirror) advertise its content hash with a `have` message, so a
  * request carrying `hash` can be served by the owner or any holder, failing over mid-stream.
+ * Complete, verified entries of the transfer cache (see PartialCache) are advertised and served the same way.
  */
 const MAGIC = 0x67
 const K_JSON = 1
@@ -46,6 +48,8 @@ export interface GetReq {
   bg?: boolean
   /** a range of a media stream: the server lists all of one peer's ranges of a file as one transfer */
   stream?: boolean
+  /** which playback of it, so the server can cancel just that one */
+  sid?: string
 }
 
 export interface Meta {
@@ -59,7 +63,8 @@ type Wire =
   | { t: 'get'; id: number; req: GetReq }
   | { t: 'meta'; id: number; meta: Meta }
   | { t: 'end'; id: number }
-  | { t: 'err'; id: number; code: 'notfound' | 'failed'; msg?: string }
+  // canceled: the sender stopped it on purpose (older receivers treat it as failed, with msg)
+  | { t: 'err'; id: number; code: 'notfound' | 'failed' | 'canceled'; msg?: string }
   | { t: 'wait'; id: number; reason: 'relink' }
   | { t: 'cancel'; id: number }
   | { t: 'have'; hashes: string[]; aliases: Record<string, string> }
@@ -115,6 +120,13 @@ interface ActiveReq {
   reject(e: Error): void
 }
 
+/** The other side stopped this transfer on purpose: don't look for another source. */
+export class CanceledBy extends Error {
+  constructor(readonly who: string) {
+    super(`Canceled by ${who}`)
+  }
+}
+
 export interface PendingRelink {
   key: string
   kind: 'file' | 'dir'
@@ -152,13 +164,15 @@ export const decodeData = (buf: Uint8Array) => {
 export class P2P {
   private links = new Map<string, Link>()
   private reqs = new Map<number, ActiveReq>()
-  private serving = new Map<string, { cancelled: boolean }>()
+  private serving = new Map<string, { cancelled: boolean; tid?: string; byMe?: boolean }>()
   private waiting: { link: Link; id: number; req: GetReq }[] = []
   private pending = new Map<string, PendingRelink>()
   private thumbCache = new Map<string, Blob | null>()
   private previewCache = new Map<string, Promise<Blob | null>>()
   /** stream transfer id -> ranges of it being served right now */
   private streamsOut = new Map<string, number>()
+  /** stream transfers this person canceled: further ranges of them are refused */
+  private streamsStopped = new Set<string>()
   private nextId = (Math.random() * 2 ** 30) | 0
   private timer: ReturnType<typeof setInterval>
   private version = 0
@@ -174,9 +188,13 @@ export class P2P {
     private lookup: (key: string) => { name: string; kind: 'file' | 'dir' } | undefined,
     readonly mirror: Mirror,
     private board: string,
+    private partial: PartialCache,
   ) {
     this.timer = setInterval(this.tick, 500)
-    this.unsubMirror = mirror.subscribe(this.advertiseSoon)
+    let held = partial.heldVersion
+    const unsubPartial = partial.subscribe(() => held !== partial.heldVersion && ((held = partial.heldVersion), this.advertiseSoon()))
+    const unsubMirror = mirror.subscribe(this.advertiseSoon)
+    this.unsubMirror = () => (unsubMirror(), unsubPartial())
     // y-webrtc creates its room asynchronously. Hook the connection map the moment it exists so we
     // intercept our frames from a connection's very first message (a poll alone would race).
     void Promise.resolve((provider as any).key).then(() => this.hookRoom())
@@ -277,7 +295,8 @@ export class P2P {
   }
   private sendHave(link: Link) {
     const { hashes, aliases } = this.mirror.heldFor(this.board)
-    void this.sendFrame(link, encodeJSON({ t: 'have', hashes, aliases })).catch(() => {})
+    const all = [...new Set([...hashes, ...this.partial.heldFor(this.board)])]
+    void this.sendFrame(link, encodeJSON({ t: 'have', hashes: all, aliases })).catch(() => {})
   }
 
   destroy() {
@@ -465,7 +484,8 @@ export class P2P {
         } else if (msg.t === 'wait') {
           if (!this.failover(ar, ar.skip)) ar.h.onState?.('waiting-relink')
         } else if (msg.t === 'err') {
-          if (!this.failover(ar, ar.bad)) this.fail(ar, new Error(msg.code === 'notfound' ? 'not found' : (msg.msg ?? 'failed')))
+          if (msg.code === 'canceled') this.fail(ar, new CanceledBy(link.name ?? 'a peer'))
+          else if (!this.failover(ar, ar.bad)) this.fail(ar, new Error(msg.code === 'notfound' ? 'not found' : (msg.msg ?? 'failed')))
         } else void ar.chain.then(() => this.finish(ar))
         break
       }
@@ -575,10 +595,12 @@ export class P2P {
   private async resolve(req: GetReq): Promise<Resolved | 'relink' | null> {
     const miss = () => (this.lookup(req.key) ? ('relink' as const) : null)
     if ((req.op === 'file' || req.op === 'preview') && req.hash) {
-      const b = await this.mirror.get(req.hash, this.board)
-      const e = this.mirror.entry(req.hash)
+      let b = await this.mirror.get(req.hash, this.board)
+      let e: { name: string; mime: string } | undefined = this.mirror.entry(req.hash)
+      if (!b) ({ blob: b, e } = (await this.partial.servable(req.hash, this.board)) ?? { blob: null, e: undefined })
       if (b && e && req.op === 'preview') return this.resolvePreview(req.hash, b, e.name)
-      if (b && e) return { name: e.name, size: b.size, mime: e.mime, mirror: true, read: (a, c) => b.slice(a, c).arrayBuffer() }
+      const blob = b
+      if (blob && e) return { name: e.name, size: blob.size, mime: e.mime, mirror: true, read: (a, c) => blob.slice(a, c).arrayBuffer() }
     }
     if (req.kind === 'file') {
       const f = await this.sources.getFile(req.key)
@@ -654,7 +676,7 @@ export class P2P {
 
   private async serve(link: Link, id: number, req: GetReq) {
     const skey = `${link.peerId}:${id}`
-    const st = { cancelled: false }
+    const st: { cancelled: boolean; tid?: string; byMe?: boolean } = { cancelled: false }
     this.serving.set(skey, st)
     const tid = `up:${skey}`
     let tracked = false
@@ -670,19 +692,24 @@ export class P2P {
       await send({ t: 'meta', id, meta: { name: r.name, size: r.size, mime: r.mime } })
       if (req.op === 'file' && req.stream) {
         // ranges of one stream, reported together: active while any is being sent
-        streamTid = `up:stream:${link.peerId}:${req.key}`
+        const tid = `up:stream:${link.peerId}:${req.sid ?? req.key}`
+        if (this.streamsStopped.has(tid)) return void (await send({ t: 'err', id, code: 'canceled', msg: `Canceled by ${this.self.name}` }))
+        streamTid = st.tid = tid
         const n = (this.streamsOut.get(streamTid) ?? 0) + 1
         this.streamsOut.set(streamTid, n)
         if (n === 1) {
           const prev = this.transfers.getSnapshot().find((t) => t.id === streamTid)
           if (prev) this.transfers.patch(streamTid, { state: 'active' })
-          else this.transfers.add({ id: streamTid, dir: 'up', name: r.name, size: r.size, done: 0, state: 'active', peerName: link.name ?? 'a peer', startedAt: Date.now() })
+          else {
+            const t = streamTid
+            this.transfers.add({ id: t, dir: 'up', name: r.name, size: r.size, done: 0, state: 'active', peerName: link.name ?? 'a peer', startedAt: Date.now(), cancel: () => this.stopStream(t) })
+          }
         }
       } else if (req.op === 'file') {
         tracked = true
         this.transfers.add({
           id: tid, dir: 'up', name: r.name, size: r.size, done: sent, state: 'active',
-          peerName: link.name ?? 'a peer', startedAt: Date.now(), cancel: () => (st.cancelled = true),
+          peerName: link.name ?? 'a peer', startedAt: Date.now(), cancel: () => ((st.cancelled = st.byMe = true), this.transfers.patch(tid, { state: 'canceled' })),
         })
       }
       const ok = await this.pump(
@@ -703,7 +730,11 @@ export class P2P {
       if (ok) {
         await send({ t: 'end', id })
         if (tracked) this.transfers.patch(tid, { state: 'done', done: r.size })
-      } else if (tracked) this.transfers.patch(tid, { state: 'canceled' })
+      } else {
+        if (tracked) this.transfers.patch(tid, { state: 'canceled' })
+        // canceled here, not by the receiver: tell them, so they stop waiting (and don't ask someone else)
+        if (st.byMe) await send({ t: 'err', id, code: 'canceled', msg: `Canceled by ${this.self.name}` }).catch(() => {})
+      }
     } catch (e) {
       const name = (e as Error)?.name
       if ((name === 'NotFoundError' || name === 'NotReadableError') && !st.cancelled && !fromMirror) {
@@ -722,10 +753,17 @@ export class P2P {
         if (n > 0) this.streamsOut.set(streamTid, n)
         else {
           this.streamsOut.delete(streamTid)
-          this.transfers.patch(streamTid, { state: 'done' })
+          this.transfers.patch(streamTid, { state: this.streamsStopped.has(streamTid) ? 'canceled' : 'done' })
         }
       }
     }
+  }
+
+  /** Stops one peer's stream: the ranges being sent now, and any it asks for later. */
+  private stopStream(tid: string) {
+    this.streamsStopped.add(tid)
+    this.serving.forEach((st) => st.tid === tid && (st.cancelled = st.byMe = true))
+    this.transfers.patch(tid, { state: 'canceled' })
   }
 
   private async needRelink(link: Link, id: number, req: GetReq, from: number) {

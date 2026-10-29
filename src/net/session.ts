@@ -4,6 +4,7 @@ import { getBoards, getProfile, type Profile } from '../lib/storage'
 import { FileService } from './fileService'
 import { Mirror } from './mirror'
 import { P2P } from './p2p'
+import { PartialCache } from './partial'
 import { joinPresence, type PresenceHandle } from './presence'
 import { LocalSources } from './sources'
 import { FileSync } from './sync'
@@ -18,6 +19,7 @@ export interface Session {
   files: FileService
   sources: LocalSources
   mirror: Mirror
+  partial: PartialCache
   sync: FileSync
   transfers: TransferStore
   /** announces this person in the board's presence room (seen from other people's home screens) */
@@ -27,6 +29,7 @@ export interface Session {
 /** What this browser can serve is shared across boards (copy/paste between boards keeps working). */
 const sources = new LocalSources()
 const mirror = new Mirror()
+const partial = new PartialCache()
 
 function create(id: string): Session {
   const profile = getProfile()
@@ -48,9 +51,10 @@ function create(id: string): Session {
     },
     mirror,
     id,
+    partial,
   )
-  const files = new FileService(p2p, profile, transfers, mirror, id)
-  const sync = new FileSync(store, p2p, mirror, sources, files, profile, transfers)
+  const files = new FileService(p2p, profile, transfers, mirror, id, partial)
+  const sync = new FileSync(store, p2p, mirror, sources, files, profile, transfers, partial)
   store.onLoaded(() => {
     const all = [...store.getSnapshot().all.values()]
     // restore persisted handles (Chromium) for everything this person shares, without prompting
@@ -68,7 +72,7 @@ function create(id: string): Session {
   })
   const presence = joinPresence(id, profile, () => store.name)
   store.meta.observe(() => presence.refresh())
-  return { id, profile, store, p2p, files, sources, mirror, sync, transfers, presence }
+  return { id, profile, store, p2p, files, sources, mirror, partial, sync, transfers, presence }
 }
 
 interface Entry {
@@ -107,6 +111,7 @@ diagSection('boards', () => ({
       people: s.store.awareness.getStates().size,
       p2p: s.p2p.diagInfo(),
       mirror: s.mirror.stats(),
+      partial: s.partial.stats(),
     }
   }),
 }))

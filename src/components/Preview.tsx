@@ -69,11 +69,15 @@ function SyncButton({ item }: { item: FileItem }) {
   )
 }
 
+/** Fired when a preview opens: videos playing on the board pause for it (Media's InlineVideo). */
+export const PREVIEW_OPENED = 'gooseboard:preview-opened'
+
 export function PreviewProvider({ children }: { children: ReactNode }) {
   const [args, setArgs] = useState<PreviewArgs | null>(null)
   const [embed, setEmbed] = useState<EmbedPreviewArgs | null>(null)
-  const open = useCallback((a: PreviewArgs) => setArgs(a), [])
-  const openEmbed = useCallback((a: EmbedPreviewArgs) => setEmbed(a), [])
+  const opened = () => window.dispatchEvent(new Event(PREVIEW_OPENED))
+  const open = useCallback((a: PreviewArgs) => (opened(), setArgs(a)), [])
+  const openEmbed = useCallback((a: EmbedPreviewArgs) => (opened(), setEmbed(a)), [])
   return (
     <Ctx.Provider value={open}>
       <EmbedCtx.Provider value={openEmbed}>

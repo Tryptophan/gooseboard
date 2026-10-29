@@ -14,13 +14,16 @@ const LABEL: Record<string, string> = {
   done: 'Done',
   error: 'Failed',
   canceled: 'Canceled',
+  interrupted: 'Interrupted',
 }
 
 const isFinished = (t: Transfer) => t.state === 'done' || t.state === 'error' || t.state === 'canceled'
+/** not moving: finished, or stopped and waiting for Resume */
+const isIdle = (t: Transfer) => isFinished(t) || t.state === 'interrupted'
 
 /** What's moving right now, for the badge on Goosey: count and overall 0..1 progress. */
 export function useTransferProgress() {
-  const live = useTransfers().filter((t) => !isFinished(t))
+  const live = useTransfers().filter((t) => !isIdle(t))
   const size = live.reduce((n, t) => n + t.size, 0)
   const done = live.reduce((n, t) => n + Math.min(t.done, t.size), 0)
   return { count: live.length, pct: size ? Math.min(1, done / size) : 0 }
@@ -48,7 +51,7 @@ export function TransfersTab() {
   return (
     <>
       <div className={s.transfersHead}>
-        <span className={s.tSummary}>{list.length ? `${list.filter((t) => !isFinished(t)).length} moving · ${list.length} in all` : ''}</span>
+        <span className={s.tSummary}>{list.length ? `${list.filter((t) => !isIdle(t)).length} moving · ${list.length} in all` : ''}</span>
         <span>
           <button disabled={!list.some(isFinished)} onClick={() => transfers.clearFinished()}>
             Clear finished
@@ -63,7 +66,9 @@ export function TransfersTab() {
 function TransferRow({ t }: { t: Transfer }) {
   const { transfers } = useSession()
   const pct = t.size ? Math.min(100, (t.done / t.size) * 100) : 0
-  const finished = isFinished(t)
+  const idle = isIdle(t)
+  // dismissing a transfer that could resume also forgets it was wanted
+  const close = () => (idle ? (t.resume && t.cancel?.(), transfers.remove(t.id)) : t.cancel?.())
   return (
     <div className={s.transfer}>
       <div className={s.transferTop}>
@@ -71,7 +76,12 @@ function TransferRow({ t }: { t: Transfer }) {
         <span className={s.tName} title={t.name}>
           {t.name}
         </span>
-        <button title={finished ? 'Dismiss' : 'Cancel'} onClick={() => (finished ? transfers.remove(t.id) : t.cancel?.())}>
+        {t.resume && idle && (
+          <button className={s.tResume} onClick={t.resume}>
+            Resume
+          </button>
+        )}
+        <button title={idle ? 'Dismiss' : 'Cancel'} onClick={close}>
           <Icon name="close" size={13} />
         </button>
       </div>

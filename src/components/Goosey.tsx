@@ -344,8 +344,9 @@ function AutoSync() {
 }
 
 function Storage() {
-  const { mirror } = useSession()
+  const { mirror, partial } = useSession()
   useSyncExternalStore(mirror.subscribe, mirror.getVersion)
+  useSyncExternalStore(partial.subscribe, partial.getVersion)
   const [usage, setUsage] = useState<number | null>(null)
   const [models, setModels] = useState<number | null>(null)
   const refresh = async () => {
@@ -357,6 +358,7 @@ function Storage() {
     void refresh()
   }, [])
   const files = mirror.stats()
+  const pieces = partial.stats()
 
   const clearModels = async () => {
     if (!(await confirmDialog({ title: 'Delete the AI models?', message: 'The speech model downloads again the next time you record a voice note.', ok: 'Delete', danger: true }))) return
@@ -367,8 +369,13 @@ function Storage() {
     void refresh()
   }
   const clearFiles = async () => {
-    if (!(await confirmDialog({ title: 'Forget cached files?', message: 'Copies of other people’s files kept in this browser are removed. Files you saved to disk stay there. Boards fetch what they need again.', ok: 'Forget', danger: true }))) return
+    if (!(await confirmDialog({ title: 'Forget synced files?', message: 'Copies of other people’s files kept in this browser are removed. Files you saved to disk stay there. Boards fetch what they need again.', ok: 'Forget', danger: true }))) return
     await mirror.clear()
+    void refresh()
+  }
+  const clearPieces = async () => {
+    if (!(await confirmDialog({ title: 'Clear the transfer cache?', message: 'Pieces of files fetched from other people (streamed videos, and downloads and syncs not yet finished) are removed. Synced files stay. Unfinished transfers start over.', ok: 'Clear', danger: true }))) return
+    await partial.clear()
     void refresh()
   }
 
@@ -385,9 +392,16 @@ function Storage() {
           </button>
         </li>
         <li>
-          <span>Cached files</span>
+          <span>Synced files</span>
           <span className={c.muted}>{files.count ? `${files.count} · ${formatSize(files.bytes)}` : 'none'}</span>
-          <button title="Forget cached copies of other people’s files" disabled={!files.count} onClick={() => void clearFiles()}>
+          <button title="Forget synced copies of other people’s files" disabled={!files.count} onClick={() => void clearFiles()}>
+            <Icon name="trash" size={13} />
+          </button>
+        </li>
+        <li title="Pieces of files fetched from other people, kept (up to 2 GB) so transfers resume and videos replay offline">
+          <span>Transfer cache</span>
+          <span className={c.muted}>{pieces.count ? `${pieces.count} · ${formatSize(pieces.bytes)}` : 'none'}</span>
+          <button title="Clear the transfer cache" disabled={!pieces.count} onClick={() => void clearPieces()}>
             <Icon name="trash" size={13} />
           </button>
         </li>

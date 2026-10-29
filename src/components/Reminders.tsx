@@ -58,7 +58,7 @@ export function Reminders({ board, onOpenBoard }: { board?: Reminder['board']; o
               <button className={s.item} onClick={() => setEditing(r)} title="Edit">
                 <b>{r.text}</b>
                 <span>
-                  {r.next === null ? `Done · ${formatWhen(r.at)}` : formatWhen(r.next)}
+                  {r.next === null ? `${r.missed ? 'Missed' : 'Done'} · ${formatWhen(r.at)}` : formatWhen(r.next)}
                   {r.repeat !== 'none' && ` · ${repeatLabel(r)}`}
                 </span>
               </button>

@@ -161,7 +161,7 @@ export class Mirror {
     this.bump()
   }
 
-  /** Copies held for other people's files, for Goosey's storage settings. Saved-to-disk copies live in the person's own folders. */
+  /** Copies held for other people's files, for "Synced files" in Goosey's storage settings. Saved-to-disk copies live in the person's own folders. */
   stats() {
     let count = 0
     let bytes = 0

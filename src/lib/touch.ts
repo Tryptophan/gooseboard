@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 
 /** Pointer type of the most recent pointerdown anywhere: lets click/contextmenu handlers tell touch from mouse. */
 export let lastPointerType = 'mouse'
@@ -77,4 +77,33 @@ export const pressEvent = (at: { clientX: number; clientY: number }) => ({ ...at
 export function longPressMenu(e: { pointerType: string; clientX: number; clientY: number; target: EventTarget }) {
   const el = e.target as Element
   longPress(e, ({ clientX, clientY }) => el.isConnected && el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX, clientY })))
+}
+
+/**
+ * Keeps the screen on while `on` (a board open on a phone or tablet): the browser lets go of the
+ * lock whenever the page is hidden, so it's taken again each time the page comes back.
+ */
+export function useWakeLock(on: boolean) {
+  useEffect(() => {
+    if (!on || !('wakeLock' in navigator)) return
+    let lock: WakeLockSentinel | null = null
+    let dead = false
+    const take = async () => {
+      if (document.visibilityState !== 'visible' || (lock && !lock.released)) return
+      try {
+        const l = await navigator.wakeLock.request('screen')
+        if (dead) void l.release()
+        else lock = l
+      } catch {
+        /* refused (battery saver, or not a secure page): the screen sleeps as usual */
+      }
+    }
+    void take()
+    document.addEventListener('visibilitychange', take)
+    return () => {
+      dead = true
+      document.removeEventListener('visibilitychange', take)
+      void lock?.release()
+    }
+  }, [on])
 }

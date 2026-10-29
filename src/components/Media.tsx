@@ -4,11 +4,12 @@ import { getAutoSyncMax } from '../lib/autoSync'
 import { loadVolume, saveVolume, type MediaItem } from '../lib/media'
 import type { FileItem } from '../model/types'
 import { relink } from '../model/actions'
+import { useCoarse } from '../lib/touch'
 import { canStream } from '../net/streamSW'
 import { useFileSync, useSession, usePeers, useSourcesVersion } from '../state/session'
 import { safeThumb, SyncBadge } from './FileCard'
 import { Icon } from './Icons'
-import { usePreview } from './Preview'
+import { PREVIEW_OPENED, usePreview } from './Preview'
 import { TypeIcon } from './TypeIcon'
 import s from './Media.module.css'
 
@@ -140,6 +141,7 @@ function useVideoSrc(item: FileItem) {
 function InlineVideo({ item, poster }: { item: FileItem; poster?: string }) {
   const ref = useRef<HTMLVideoElement>(null)
   const { url, wait, err, failed } = useVideoSrc(item)
+  const coarse = useCoarse()
   const [paused, setPaused] = useState(false)
   // Chrome pauses while the seek bar is dragged and resumes on release: only call it paused
   // once the pointer is up and the video has settled, or the controls vanish mid-scrub
@@ -158,11 +160,15 @@ function InlineVideo({ item, poster }: { item: FileItem; poster?: string }) {
       pressing.current = false
       check()
     }
+    // opening a preview (another video, a picture, a link) pauses this one, where it is
+    const pause = () => ref.current?.pause()
     window.addEventListener('pointerup', up, true)
     window.addEventListener('pointercancel', up, true)
+    window.addEventListener(PREVIEW_OPENED, pause)
     return () => {
       window.removeEventListener('pointerup', up, true)
       window.removeEventListener('pointercancel', up, true)
+      window.removeEventListener(PREVIEW_OPENED, pause)
       clearTimeout(settle.current)
     }
   }, [])
@@ -189,8 +195,9 @@ function InlineVideo({ item, poster }: { item: FileItem; poster?: string }) {
           }}
         />
       )}
-      {/* Firefox's controls swallow every pointer event on the video: cover all but their strip so it still drags */}
-      {url && !err && !paused && <div className={s.grab} />}
+      {/* Firefox's controls swallow every pointer event on the video: cover all but their strip so it still drags
+          (not on touch, where a tap anywhere brings up the controls) */}
+      {url && !err && !paused && !coarse && <div className={s.grab} />}
       {(err || wait || !url) && <div className={s.note}>{err ? `Can’t play: ${err}` : (wait ?? 'Loading…')}</div>}
       {url && !err && paused && (
         <button className={s.bigPlay} title="Play" onClick={() => void ref.current?.play().catch(() => {})}>

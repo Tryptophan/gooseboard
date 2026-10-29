@@ -77,18 +77,26 @@ function overScroller(e: WheelEvent, host: HTMLElement): boolean {
 const VIDEO_CONTROLS_PX = 48
 
 /** True when the pointer went down on a playing video's controls, which belong to the player. */
-function onVideoControls(el: HTMLElement, e: { clientX: number; clientY: number }) {
+function onVideoControls(el: HTMLElement, e: { clientX: number; clientY: number; pointerType: string }) {
   if (!(el instanceof HTMLVideoElement) || !el.controls) return false
+  // a phone's player shows its controls on a tap anywhere: a playing video is the player's (pause it to move it)
+  if (e.pointerType === 'touch') return true
   const r = el.getBoundingClientRect()
   const k = el.offsetHeight ? r.height / el.offsetHeight : 1
   return (r.bottom - e.clientY) / k < VIDEO_CONTROLS_PX
 }
 
-/** True when the pointer went down on the scrollbar of `el` or a scrollable ancestor inside its item. */
+/**
+ * True when the pointer went down on the scrollbar of `el` or a scrollable ancestor inside its item.
+ * Only inside an item, and only what really scrolls: the selection box overflows by its handles, and
+ * a corner handle read as its "scrollbar" (so pictures and videos wouldn't resize).
+ */
 function onScrollbar(el: HTMLElement, e: { clientX: number; clientY: number }) {
+  if (!el.closest('[data-item-id]')) return false
   for (let n: HTMLElement | null = el; n && !n.dataset.itemId; n = n.parentElement) {
-    const sx = n.scrollWidth > n.clientWidth
-    const sy = n.scrollHeight > n.clientHeight
+    const css = getComputedStyle(n)
+    const sx = n.scrollWidth > n.clientWidth && /auto|scroll/.test(css.overflowX)
+    const sy = n.scrollHeight > n.clientHeight && /auto|scroll/.test(css.overflowY)
     if (!sx && !sy) continue
     const r = n.getBoundingClientRect()
     // the world layer is zoomed: rects are on screen, client sizes are not

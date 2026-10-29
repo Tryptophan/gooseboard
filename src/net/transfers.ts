@@ -1,4 +1,5 @@
-export type TransferState = 'connecting' | 'active' | 'waiting-owner' | 'waiting-relink' | 'done' | 'error' | 'canceled'
+/** interrupted: stopped by a reload or close, its bytes kept, waiting for Resume */
+export type TransferState = 'connecting' | 'active' | 'waiting-owner' | 'waiting-relink' | 'done' | 'error' | 'canceled' | 'interrupted'
 
 export interface Transfer {
   id: string
@@ -11,6 +12,8 @@ export interface Transfer {
   error?: string
   startedAt: number
   cancel?: () => void
+  /** carries on from the bytes already fetched */
+  resume?: () => void
 }
 
 type Listener = () => void

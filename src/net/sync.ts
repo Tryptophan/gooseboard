@@ -6,7 +6,8 @@ import type { BoardStore } from '../model/board'
 import type { FileItem } from '../model/types'
 import type { FileService } from './fileService'
 import type { Mirror } from './mirror'
-import type { P2P, ReqState } from './p2p'
+import { CanceledBy, type P2P, type ReqState } from './p2p'
+import type { PartialCache } from './partial'
 import type { LocalSources } from './sources'
 import type { TransferStore } from './transfers'
 
@@ -28,6 +29,8 @@ interface Active {
   done: number
   size: number
   ctl: AbortController
+  /** stopped by the person here (not because nobody can serve it) */
+  byUser?: boolean
 }
 
 type Listener = () => void
@@ -36,7 +39,9 @@ type Listener = () => void
  * Per-board background replication. Metadata (name, size, thumb) arrives with the doc first;
  * then the owner backfills each file's content hash, and every peer pulls files up to its
  * auto-sync size (lib/autoSync) into its Mirror from whoever holds them. Larger files stay
- * unsynced until someone downloads one or syncs it by hand (syncNow).
+ * unsynced until someone downloads one or syncs it by hand (syncNow). Bytes go through the
+ * transfer cache (PartialCache), so a sync cut off by a reload carries on when the board opens
+ * again, and a file already there in full (say, a video watched to the end) syncs without the network.
  */
 export class FileSync {
   private active = new Map<string, Active>()
@@ -59,9 +64,14 @@ export class FileSync {
     private files: FileService,
     private self: Profile,
     private transfers: TransferStore,
+    private partial: PartialCache,
   ) {
     const s = this.schedule
-    this.unsubs = [store.subscribe(s), p2p.subscribe(s), mirror.subscribe(s), sources.subscribe(s), subscribeAutoSync(s)]
+    // syncs a reload cut off are found once the transfer cache has loaded; a file it now holds in full can sync
+    void partial.ready.then(s)
+    let held = partial.heldVersion
+    const onHeld = () => held !== partial.heldVersion && ((held = partial.heldVersion), s())
+    this.unsubs = [store.subscribe(s), p2p.subscribe(s), mirror.subscribe(s), sources.subscribe(s), subscribeAutoSync(s), partial.subscribe(onHeld)]
     this.retry = setInterval(s, RETRY_MS)
     store.onLoaded(s)
   }
@@ -81,7 +91,8 @@ export class FileSync {
     if ((it.owner === this.self.id && this.sources.isReady(it.key)) || (it.hash && this.mirror.has(it.hash))) return { status: 'synced', holders }
     const a = it.hash ? this.active.get(it.hash) : undefined
     if (a) return { status: 'syncing', pct: a.size ? a.done / a.size : 0, holders }
-    return { status: holders ? 'unsynced' : 'unavailable', holders }
+    // pieces in the transfer cache still play (or sync, if all there) with nobody online
+    return { status: holders || (it.hash && this.partial.has(it.hash)) ? 'unsynced' : 'unavailable', holders }
   }
 
   /** True when this file is too big to sync on its own but could be synced by hand now. */
@@ -89,7 +100,7 @@ export class FileSync {
     if (it.owner === this.self.id || !it.hash || this.active.has(it.hash)) return false
     // a copy held only for this session (opened, not synced) can be kept too
     if (this.mirror.has(it.hash)) return this.mirror.entry(it.hash)?.kind === 'mem'
-    return this.holders(it).length > 0
+    return this.holders(it).length > 0 || this.partial.complete(it.hash)
   }
 
   /** Keeps a copy of a (big) file in this browser, as if it were small enough to auto-sync. */
@@ -103,6 +114,7 @@ export class FileSync {
     }
     this.manual.add(hash)
     this.failedAt.delete(hash)
+    void this.partial.setWant(hash, it, this.store.id, { want: 'sync' })
     this.schedule()
   }
 
@@ -143,14 +155,18 @@ export class FileSync {
         if (!this.mirror.has(it.hash, board)) void this.mirror.adopt(it.hash, board)
         continue
       }
-      if (mine || (it.size > getAutoSyncMax() && !this.manual.has(it.hash)) || this.active.has(it.hash) || this.active.size >= CONCURRENCY) continue
+      const pe = this.partial.entry(it.hash)
+      const asked = this.manual.has(it.hash) || pe?.want === 'sync'
+      if (mine || (it.size > getAutoSyncMax() && !asked) || this.active.has(it.hash) || this.active.size >= CONCURRENCY) continue
+      // the sender canceled it: it waits for Resume (syncNow)
+      if (pe?.canceledBy && !this.manual.has(it.hash)) continue
       if (Date.now() - (this.failedAt.get(it.hash) ?? 0) < RETRY_MS) continue
-      if (this.holders(it).length) this.fetch(it)
+      if (this.holders(it).length || this.partial.complete(it.hash)) this.fetch(it)
     }
     // stop fetches nobody can serve any more, or for files that left the board
     for (const [hash, a] of this.active) {
       const holders = this.p2p.holders(hash).length + (this.p2p.reachableUsers().has(a.owner) ? 1 : 0)
-      if (!wanted.has(hash) || !holders) a.ctl.abort()
+      if (!wanted.has(hash) || (!holders && !this.partial.complete(hash))) a.ctl.abort()
     }
     this.emit()
   }
@@ -183,7 +199,14 @@ export class FileSync {
     let last = 0
     // listed with the other transfers, so syncing is visible (and cancellable) like any download
     const tid = `sync:${this.store.id}:${hash}`
-    this.transfers.add({ id: tid, dir: 'down', name: it.name, size: it.size, done: 0, state: 'connecting', peerName: it.ownerName, startedAt: Date.now(), cancel: () => a.ctl.abort() })
+    const board = this.store.id
+    const cancel = () => {
+      a.byUser = true
+      a.ctl.abort()
+    }
+    this.transfers.add({ id: tid, dir: 'down', name: it.name, size: it.size, done: 0, state: 'connecting', peerName: it.ownerName, startedAt: Date.now(), cancel })
+    // remembered, so a sync cut off by a reload carries on next time
+    void this.partial.setWant(hash, it, board, { want: 'sync' })
     this.files
       .getBlob(it.owner, { op: 'file', kind: 'file', key: it.key, hash, bg: true }, (s: ReqState) => this.transfers.patch(tid, { state: s }), {
         signal: a.ctl.signal,
@@ -201,7 +224,18 @@ export class FileSync {
         () => this.transfers.patch(tid, { state: 'done', done: it.size }),
         (e: Error) => {
           this.failedAt.set(hash, Date.now())
-          this.transfers.patch(tid, a.ctl.signal.aborted || e.message === 'canceled' ? { state: 'canceled' } : { state: 'error', error: e.message })
+          const resume = () => this.syncNow(it)
+          if (e instanceof CanceledBy) {
+            // the bytes so far stay cached; only Resume starts it again
+            this.manual.delete(hash)
+            void this.partial.setWant(hash, it, board, { want: 'sync', canceledBy: e.who })
+            this.transfers.patch(tid, { state: 'canceled', error: e.message, resume })
+          } else if (a.byUser) {
+            this.manual.delete(hash)
+            void this.partial.setWant(hash, it, board, {})
+            this.transfers.patch(tid, { state: 'canceled' })
+          } else if (a.ctl.signal.aborted || e.message === 'canceled') this.transfers.patch(tid, { state: 'interrupted', resume })
+          else this.transfers.patch(tid, { state: 'error', error: e.message })
         },
       )
       .finally(() => {

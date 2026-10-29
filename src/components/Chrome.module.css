@@ -90,6 +90,7 @@
 .transfersHead button:disabled { opacity: 0.4; cursor: default; }
 .transfer { padding: 6px 4px; border-top: 1px solid var(--border); margin-top: 4px; }
 .transferTop { display: flex; align-items: center; gap: 6px; }
+.transfer .tResume { color: var(--accent); font-weight: 600; font-size: 12px; }
 .tName { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
 .bar { height: 5px; background: var(--hover); border-radius: 3px; overflow: hidden; margin: 5px 0 3px; }
 .bar i { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
