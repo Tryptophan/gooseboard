@@ -40,7 +40,7 @@ A simple collaborative decentralized workspace for notes, drawings, files, and f
 - Live cursors and names for everyone on the board. Click someone's avatar to follow them: your view keeps their cursor centered at their zoom, with a banner to cancel.
 - Pick your own name and colour. They're stored in your browser, with no sign-up.
 - Edits merge cleanly even when people change the same note at once, and offline edits sync when you reconnect.
-- **No internet? Link by QR code.** On a Wi-Fi network or hotspot with no internet, press *Add offline peer* in the connection popover (or *Join offline peer* on the home screen of a device that doesn't have the board yet). Each device shows a code and scans the other's with its camera, or from a photo. The device without the board opens it, and if both started from different boards, each is asked whether to join the other's. After that, anyone already linked introduces everyone else, so each new device needs only one scan. A reload with no internet needs a new scan.
+- **No internet? Link by QR code.** On a Wi-Fi network or hotspot with no internet, press *Add offline peer* in the connection popover (or *Join offline peer* on the home screen of a device that doesn't have the board yet). Each device shows a code and scans the other's with its camera, or from a photo. The device without the board opens it. If both started from different boards, each is asked whether to join the other's, and if both started from the home screen, they open a new board together. After that, anyone already linked introduces everyone else, so each new device needs only one scan. A reload with no internet needs a new scan.
 
 **Files without uploads**
 - Files stay on the owner's computer and stream straight to whoever opens them.

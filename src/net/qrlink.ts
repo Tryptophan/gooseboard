@@ -1,5 +1,6 @@
 import { decode, isValidPacket, QWBPConnection, QWBPTimeoutError } from 'qwbp'
 import { diag } from '../lib/diag'
+import { newBoardId } from '../lib/ids'
 import { getProfile } from '../lib/storage'
 import { mesh } from './signal'
 import type { MeshChannel, MeshMsg } from './signal/mesh'
@@ -27,6 +28,8 @@ type Wire =
   | { t: 'join' }
   | { t: 'stay' }
   | { t: 'ok' }
+  // neither of us has a board: here's a new one for both
+  | { t: 'new'; board: BoardRef }
 
 export type LinkState =
   | { s: 'starting' }
@@ -266,6 +269,9 @@ export class QrLink {
         this.theyStay = true
         if (this.choice === 'stay') this.bothStay()
         break
+      case 'new':
+        if (this.peer && !this.board) this.finish(true, w.board)
+        break
     }
   }
 
@@ -273,8 +279,11 @@ export class QrLink {
     const mine = this.board
     const theirs = this.peer!.board
     if (!mine && !theirs) {
-      this.set({ s: 'failed', msg: 'Neither device has a board open. Start from a board on one of them.' })
-      return this.teardown()
+      // both came from the home screen: the one with the smaller id makes a board, and both open it
+      if (this.me.id > this.peer!.user) return
+      const board = { id: newBoardId(), name: '' }
+      this.send({ t: 'new', board })
+      return this.finish(true, board)
     }
     if (!mine) return this.finish(true)
     if (!theirs || theirs.id === mine.id) return this.finish(false)
@@ -303,9 +312,8 @@ export class QrLink {
     this.teardown()
   }
 
-  private finish(join: boolean) {
+  private finish(join: boolean, board = join ? this.peer!.board! : this.board!) {
     if (this.state.s === 'done') return
-    const board = join ? this.peer!.board! : this.board!
     this.set({ s: 'done', peer: this.peer!.name, board, join })
     // hand over to the board link y-webrtc dials across the mesh; this one is only a bootstrap
     const user = this.peer!.user
