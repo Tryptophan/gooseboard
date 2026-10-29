@@ -141,7 +141,7 @@ export default function Home() {
 
       <section className={s.actions}>
         <button className={s.primary} onClick={create}>
-          <Icon name="plus" size={18} /> New board
+          <Icon name="plus" size={16} /> New board
         </button>
         <form
           onSubmit={(e) => {
@@ -160,11 +160,7 @@ export default function Home() {
           />
           <button type="submit">Join</button>
         </form>
-        <button onClick={() => setLinking(true)} title="Join a board from a device on the same Wi-Fi or hotspot, with no internet, by scanning QR codes">
-          Join offline peer
-        </button>
       </section>
-      {linking && <QrLinkDialog onClose={() => setLinking(false)} />}
 
       <section>
         <h2>Your boards</h2>
@@ -205,6 +201,10 @@ export default function Home() {
             ))}
           </ul>
         )}
+        <button className={s.offline} onClick={() => setLinking(true)} title="Join a board from a device on the same Wi-Fi or hotspot, with no internet, by scanning QR codes">
+          Join offline peer
+        </button>
+        {linking && <QrLinkDialog onClose={() => setLinking(false)} />}
       </section>
 
       <section className={s.profile}>
