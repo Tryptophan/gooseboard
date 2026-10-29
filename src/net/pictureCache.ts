@@ -1,16 +1,12 @@
-import { clear, createStore, del, entries, get, set } from 'idb-keyval'
-
-/** Most the cache keeps on disk; the least recently used entries go first. */
-export const PICTURE_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024
+import { clear, createStore, entries, get, set } from 'idb-keyval'
 
 interface Entry {
   blob: Blob
-  used: number
 }
 
 const store = createStore('gooseboard-pictures', 'pictures')
 
-// the pre-limit previews database: nothing tracked its size, so start over
+// the previous previews database, which this replaces
 try {
   indexedDB.deleteDatabase('gooseboard-previews')
 } catch {
@@ -28,15 +24,10 @@ export const clearPictures = () => clear(store).catch(() => {})
 /**
  * Pictures shown on the board, as object URLs. Thumbnails and previews share one cache.
  * Entries marked `persist` are also kept in IndexedDB, so they survive a reload and an
- * offline owner; that copy is capped at PICTURE_CACHE_MAX_BYTES, evicting least recently used.
+ * offline owner. That copy has no size limit; only clearing it from Settings removes entries.
  */
 export class PictureCache {
   private urls = new Map<string, Promise<string | null>>()
-  private pruning: Promise<void> | null = null
-
-  constructor(private maxBytes = PICTURE_CACHE_MAX_BYTES) {
-    void this.prune()
-  }
 
   /** `make` runs only when neither memory nor disk has the entry. Failures aren't cached. */
   url(id: string, make: () => Promise<Blob>, persist = false): Promise<string | null> {
@@ -58,39 +49,10 @@ export class PictureCache {
   private async load(id: string, make: () => Promise<Blob>, persist: boolean): Promise<string> {
     if (persist) {
       const hit = await get<Entry>(id, store).catch(() => undefined)
-      if (hit) {
-        void set(id, { ...hit, used: Date.now() }, store).catch(() => {})
-        return URL.createObjectURL(hit.blob)
-      }
+      if (hit) return URL.createObjectURL(hit.blob)
     }
     const blob = await make()
-    if (persist) {
-      void set(id, { blob, used: Date.now() } satisfies Entry, store)
-        .then(() => this.prune())
-        .catch(() => {})
-    }
+    if (persist) void set(id, { blob }, store).catch(() => {})
     return URL.createObjectURL(blob)
-  }
-
-  /** Drops the least recently used entries until the cache fits. Runs one at a time. */
-  private prune(): Promise<void> {
-    this.pruning ??= (async () => {
-      try {
-        const all = await entries<string, Entry>(store)
-        let total = all.reduce((n, [, e]) => n + e.blob.size, 0)
-        if (total <= this.maxBytes) return
-        all.sort((a, b) => a[1].used - b[1].used)
-        for (const [k, e] of all) {
-          if (total <= this.maxBytes) break
-          await del(k, store)
-          total -= e.blob.size
-        }
-      } catch {
-        /* best effort */
-      } finally {
-        this.pruning = null
-      }
-    })()
-    return this.pruning
   }
 }

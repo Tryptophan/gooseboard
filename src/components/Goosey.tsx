@@ -376,7 +376,7 @@ function Storage() {
             <Icon name="trash" size={13} />
           </button>
         </li>
-        <li title="Pieces of files fetched from other people (up to 2 GB), the pictures shown on boards (up to 2 GB), and thumbnails of what you share (up to 256 MB), so transfers resume and boards load quickly and offline">
+        <li title="Pieces of files fetched from other people (up to 2 GB), the pictures shown on boards (no limit), and thumbnails of what you share (up to 256 MB), so transfers resume and boards load quickly and offline">
           <span>Cache</span>
           <span className={c.muted}>{pictures === null || thumbs === null ? '…' : cache.count ? formatSize(cache.bytes) : 'none'}</span>
           <button title="Clear the cache" disabled={!cache.count} onClick={() => void clearCache()}>
