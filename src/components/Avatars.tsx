@@ -66,7 +66,7 @@ function Accessory({ kind }: { kind?: string }) {
   // hats sit down over the crown rather than perched on it
   const hat = kind === 'tophat' || kind === 'partyhat' || kind === 'beanie' || kind === 'crown' || kind === 'cowboy'
   // the goose faces right, so tilting the hat anticlockwise leans it back
-  return <g transform={hat ? `translate(${kind === 'crown' ? -1 : kind === 'partyhat' || kind === 'tophat' ? -1 : kind === 'cowboy' ? -1.5 : 0} ${kind === 'cowboy' ? 1.5 : 2.5}) rotate(-12 31 15)` : kind === 'bow' ? 'translate(0 2.5)' : kind === 'scarf' ? 'translate(0 2)' : undefined}><AccessoryShape kind={kind} /></g>
+  return <g transform={hat ? `translate(${kind === 'crown' ? -1 : kind === 'partyhat' || kind === 'tophat' ? -1 : kind === 'cowboy' ? -1.5 : kind === 'beanie' ? -1 : 0} ${kind === 'cowboy' ? 1.5 : kind === 'beanie' ? 2 : 2.5}) rotate(-12 31 15)` : kind === 'bow' ? 'translate(0 2.5)' : kind === 'scarf' ? 'translate(0 2)' : undefined}><AccessoryShape kind={kind} /></g>
 }
 
 /** Drawn twice: a solid white silhouette slightly fattened, then the colours on top. One clean halo antialiases far better than a hairline stroke on every shape. */
