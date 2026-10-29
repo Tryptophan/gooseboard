@@ -27,7 +27,7 @@ export function useBudget(ref: RefObject<HTMLElement>, fraction: number): number
 }
 
 /** The logo's goose, lowered so the top of its head sits two thirds of the way up the circle, drawn over the user's colour, with a yellow beak. */
-export function Goose({ color, accessory }: { color: string; accessory?: string }) {
+export function Goose({ accessory }: { accessory?: string }) {
   const clip = useId()
   const head = (
     <>
@@ -163,7 +163,7 @@ export function AvatarStack({ users, budget }: { users: PresenceUser[]; budget: 
     <span className={s.avatars}>
       {users.slice(0, n).map((u) => (
         <span key={u.id} className={`${s.avatar} ${s.static}`} style={{ background: u.color }} title={u.name}>
-          <Goose color={u.color} accessory={u.accessory} />
+          <Goose accessory={u.accessory} />
         </span>
       ))}
       {hidden.length > 0 && (

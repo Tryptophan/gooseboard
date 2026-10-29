@@ -246,7 +246,7 @@ export function TopBar({ boardId }: { boardId: string }) {
               onClick={() => clickPeer(p)}
               data-me-toggle={p.isSelf || undefined}
             >
-              <Goose color={p.color} accessory={p.accessory} />
+              <Goose accessory={p.accessory} />
             </button>
           ))}
           {shown < peers.length && <MoreChip hidden={peers.slice(shown).map((p) => p.name)} onClick={() => setShowMore(!showMore)} />}
@@ -265,7 +265,7 @@ export function TopBar({ boardId }: { boardId: string }) {
             {peers.map((p) => (
               <li key={p.clientId}>
                 <button className={ui.follow === p.clientId ? s.following : ''} onClick={() => clickPeer(p)} data-me-toggle={p.isSelf || undefined}>
-                  <span className={s.avatar} style={{ background: p.color }}><Goose color={p.color} accessory={p.accessory} /></span>
+                  <span className={s.avatar} style={{ background: p.color }}><Goose accessory={p.accessory} /></span>
                   <span className={s.peerName}>{p.name}</span>
                   <span className={s.muted}>{p.isSelf ? 'you' : ui.follow === p.clientId ? 'following' : ''}</span>
                 </button>
@@ -280,7 +280,7 @@ export function TopBar({ boardId }: { boardId: string }) {
           <b>Your profile</b>
           <div className={s.meRow}>
             <span className={s.mePreview} style={{ background: me.color }}>
-              <Goose color={me.color} accessory={me.accessory} />
+              <Goose accessory={me.accessory} />
             </span>
             <label className={s.meName}>
               <input
