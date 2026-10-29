@@ -223,7 +223,7 @@ export default function Home() {
         <h2 className={s.sectionTitle}>You</h2>
         <p>No accounts. Your name and color live in this browser and show on your cursor.</p>
         <div className={`${s.profileRow} ${s.editor}`}>
-          <span className={s.me} style={{ background: profile.color, width: previewSize, height: previewSize }} title="How you look to others">
+          <span className={s.me} style={{ background: profile.color, width: previewSize }} title="How you look to others">
             <Goose color={profile.color} accessory={profile.accessory} />
           </span>
           <div className={s.fields} ref={fieldsRef}>

@@ -42,7 +42,7 @@
 .profile p { color: var(--muted); margin: 0 0 10px; }
 .profileRow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .profileRow input { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); flex: 1; min-width: 200px; }
-.me { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; flex: none; }
+.me { width: 64px; aspect-ratio: 1; border-radius: 50%; overflow: hidden; flex: none; }
 .sw { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--border); cursor: pointer; padding: 0; }
 .editor { gap: 24px; align-items: flex-start; flex-wrap: nowrap; }
 /* the chip rows set the width of this column; the name field follows it */
@@ -72,7 +72,11 @@
   /* the name fills the line beside the avatar; the colors wrap below */
   .profileRow input { flex: 1 1 0; min-width: 0; }
   .nameField input { flex: none; min-width: 100%; }
-  .editor { flex-direction: column; gap: 14px; }
+  /* the preview stays beside the fields, giving up size first on the narrowest screens */
+  .editor { gap: 14px; }
+  .editor .me { flex: 0 1 auto; min-width: 48px; }
+  /* and the chips close up when even a small preview leaves no room (page gutters 32, gap 14, preview 48, 8 chips of 24) */
+  .fields .profileRow { gap: clamp(2px, calc((100vw - 286px) / 7), 6px); }
 }
 
 /* the share target's board picker (Share.tsx) */
