@@ -50,6 +50,46 @@ function kinds(code: Uint8Array) {
 }
 const mdnsOnly = (code: Uint8Array) => decode(code).candidates.every((c) => c.ip.endsWith('.local'))
 
+/**
+ * QWBP writes the other side's SDP session id as a full unsigned 64-bit number (from a hash of
+ * its fingerprint). Firefox takes at most 2^63 - 1 and refuses the whole description otherwise,
+ * so half of all links with Firefox failed. The id plays no part in security: clear its top bit.
+ */
+function fixSessionId(qwbp: QWBPConnection) {
+  const pc = (qwbp as unknown as { pc: RTCPeerConnection | null }).pc
+  if (!pc) return
+  const set = pc.setRemoteDescription.bind(pc)
+  pc.setRemoteDescription = (d: RTCSessionDescriptionInit) =>
+    set(d.sdp ? { ...d, sdp: d.sdp.replace(/^o=(\S+) (\d+)/m, (_, user: string, id: string) => `o=${user} ${BigInt(id) & 0x7fffffffffffffffn}`) } : d)
+}
+
+/**
+ * Only the offerer's addresses matter: the answerer rolls back the offer it made its code from,
+ * and gathers again on new ports, so the addresses in its code are stale. The link works when the
+ * answerer reaches the offerer (which learns the answerer's address from those checks). A device
+ * capturing the camera has its real LAN address in its code (see the constructor); one without
+ * may only have a hidden .local name. QWBP makes the larger DTLS fingerprint the offerer, so pick
+ * a certificate whose fingerprint starts high when capturing and low when not: a device with a
+ * camera then offers to one without. Two of a kind are left to chance, as before.
+ */
+async function steerRole(capturing: boolean, init: () => Promise<void>) {
+  const gen = RTCPeerConnection.generateCertificate
+  RTCPeerConnection.generateCertificate = async (alg) => {
+    let cert = await gen.call(RTCPeerConnection, alg)
+    for (let i = 0; i < 16; i++) {
+      const fp = cert.getFingerprints?.().find((f) => f.algorithm === 'sha-256')?.value
+      if (!fp || parseInt(fp.slice(0, 2), 16) >= 0x80 === capturing) break
+      cert = await gen.call(RTCPeerConnection, alg)
+    }
+    return cert
+  }
+  try {
+    await init()
+  } finally {
+    RTCPeerConnection.generateCertificate = gen
+  }
+}
+
 /** How long the codes stay valid. */
 const TIMEOUT_MS = 10 * 60_000
 
@@ -99,12 +139,13 @@ export class QrLink {
 
   private async start() {
     try {
-      await this.camera?.catch(() => {})
+      const capturing = this.camera ? await this.camera.then(() => true, () => false) : false
       if (this.closed) return
-      await this.qwbp.initialize()
+      await steerRole(capturing, () => this.qwbp.initialize())
       if (this.closed) return
+      fixSessionId(this.qwbp)
       this.mine = this.qwbp.getQRPayload()
-      diag('qrlink', 'code', kinds(this.mine))
+      diag('qrlink', 'code', { ...kinds(this.mine), capturing })
       this.set({ s: 'ready', qr: this.mine, scanned: false })
     } catch (e) {
       this.failed(e)
@@ -125,7 +166,7 @@ export class QrLink {
   private failed(e: unknown) {
     // after the handover, the bootstrap closing is expected
     if (this.closed || this.state.s === 'done') return this.teardown()
-    diag('qrlink', 'failed', { error: e, state: this.state.s })
+    diag('qrlink', 'failed', { error: e, state: this.state.s, role: this.qwbp.assignedRole })
     const hidden = this.mine && this.theirs && mdnsOnly(this.mine) && mdnsOnly(this.theirs)
     const msg =
       e instanceof QWBPTimeoutError
@@ -163,6 +204,7 @@ export class QrLink {
     // the answering side also gets the offerer's "init" channel (only there to gather candidates)
     if (ch.label !== 'qwbp' || this.ch) return
     if (this.closed) return ch.close()
+    diag('qrlink', 'open', { role: this.qwbp.assignedRole })
     this.ch = ch
     this.set({ s: 'connecting' })
     ch.addEventListener('message', (e) => {
