@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.gooseboard.twa",
+      "sha256_cert_fingerprints": [
+        "9A:11:F8:66:D3:3D:33:39:A1:23:EC:B6:5F:C5:CB:FE:0A:F9:55:73:43:42:4C:26:65:C0:6C:91:C6:09:46:7C"
+      ]
+    }
+  }
+]
