@@ -1,4 +1,4 @@
-import { getSchema, type Extensions } from '@tiptap/core'
+import { getSchema, Mark, type Extensions } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
@@ -6,6 +6,18 @@ import Link from '@tiptap/extension-link'
 import { DOMSerializer, Node as PMNode } from '@tiptap/pm/model'
 import { yXmlFragmentToProsemirrorJSON, prosemirrorJSONToYXmlFragment } from 'y-prosemirror'
 import type * as Y from 'yjs'
+
+/**
+ * Notes saved before heading sizes carry a `textSize` mark in their Yjs document, and a schema
+ * without it throws "There is no mark type textSize". Kept only so those notes still load: it
+ * renders as a plain span and is never offered in the UI.
+ */
+const LegacyTextSize = Mark.create({
+  name: 'textSize',
+  addAttributes: () => ({ size: { default: null, rendered: false } }),
+  parseHTML: () => [],
+  renderHTML: () => ['span', 0],
+})
 
 /**
  * Extensions shared by the live editor and the static renderer.
@@ -22,6 +34,7 @@ export const noteExtensions: Extensions = [
   StarterKit.configure({ history: false }),
   TaskList,
   TaskItem.configure({ nested: true }),
+  LegacyTextSize,
   Link.configure({ openOnClick: true, autolink: true, HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' } }),
 ]
 
