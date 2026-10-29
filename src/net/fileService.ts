@@ -8,12 +8,12 @@ import { CanceledBy, type GetReq, type Handlers, type Meta, type P2P, type ReqHa
 import { CHUNK, type PartialCache } from './partial'
 import type { DirEntry } from './sources'
 import { openStream, type Stream } from './streamSW'
+import { PictureCache } from './pictureCache'
 import { makePreview } from './thumbs'
 import type { TransferStore } from './transfers'
 
 const CONSOLIDATE_AT = 64 * 1024 * 1024
 const listingStore = createStore('gooseboard-listings', 'listings')
-const previewStore = createStore('gooseboard-previews', 'previews')
 /** an answer bigger than this came from a peer that sent the whole file: shrink it here */
 const PREVIEW_BYTES = 1024 * 1024
 
@@ -82,8 +82,7 @@ function saveBlob(blob: Blob, name: string) {
 
 /** User-facing operations on remote files: thumbnails, directory listings, previews, downloads. */
 export class FileService {
-  private thumbs = new Map<string, Promise<string | null>>()
-  private previews = new Map<string, Promise<string | null>>()
+  private pictures = new PictureCache()
   private shared = new Map<string, Shared>()
 
   constructor(
@@ -337,42 +336,25 @@ export class FileService {
    * `signal` (it scrolled away first) cancels the request, so the owner never makes it.
    */
   thumbURL(ownerId: string, key: string, kind: 'file' | 'dir', path?: string, signal?: AbortSignal): Promise<string | null> {
-    const ck = `${ownerId}\0${key}\0${path ?? ''}`
-    let p = this.thumbs.get(ck)
-    if (!p) {
-      p = this.getBlob(ownerId, { op: 'thumb', kind, key, path }, undefined, { signal })
-        .then((b) => URL.createObjectURL(b))
-        .catch(() => null)
-      this.thumbs.set(ck, p)
-      // don't cache failures forever: owner may be offline now and online later
-      p.then((u) => !u && this.thumbs.delete(ck))
-    }
-    return p
+    return this.pictures.url(`thumb\0${ownerId}\0${key}\0${path ?? ''}`, () =>
+      this.getBlob(ownerId, { op: 'thumb', kind, key, path }, undefined, { signal }),
+    )
   }
 
   /**
-   * Object URL of an image's PREVIEW_DIM rendition. Kept in IndexedDB, so a board's pictures
-   * stay sharp after a reload and while their owner is offline. Made locally from any copy we
-   * hold, otherwise by the owner or a holder.
+   * Object URL of an image's PREVIEW_DIM rendition. Kept in the picture cache's disk copy, so a
+   * board's pictures stay sharp after a reload and while their owner is offline. Made locally
+   * from any copy we hold, otherwise by the owner or a holder.
    */
   imageURL(ownerId: string, key: string, hash?: string): Promise<string | null> {
-    const ck = `${ownerId}\0${key}`
-    let p = this.previews.get(ck)
-    if (!p) {
-      p = (async () => {
-        let b = await get<Blob>(ck, previewStore).catch(() => undefined)
-        if (!b) {
-          b = await this.getBlob(ownerId, { op: 'preview', kind: 'file', key, hash })
-          if (b.size > PREVIEW_BYTES) b = (await makePreview(b)) ?? b
-          void set(ck, b, previewStore).catch(() => {})
-        }
-        return URL.createObjectURL(b)
-      })().catch(() => null)
-      this.previews.set(ck, p)
-      // try again later: the owner may come online
-      p.then((u) => !u && this.previews.delete(ck))
-    }
-    return p
+    return this.pictures.url(
+      `preview\0${ownerId}\0${key}`,
+      async () => {
+        const b = await this.getBlob(ownerId, { op: 'preview', kind: 'file', key, hash })
+        return b.size > PREVIEW_BYTES ? ((await makePreview(b)) ?? b) : b
+      },
+      true,
+    )
   }
 
   /**
@@ -380,7 +362,7 @@ export class FileService {
    * the owner's own disk, or a kept copy), never from the network: null if there's none.
    */
   async localImage(ownerId: string, key: string, hash?: string): Promise<Blob | null> {
-    const cached = await get<Blob>(`${ownerId}\0${key}`, previewStore).catch(() => undefined)
+    const cached = await this.pictures.peek(`preview\0${ownerId}\0${key}`)
     if (cached) return cached
     if (ownerId !== this.self.id && !(hash && this.mirror.has(hash, this.board))) return null
     // served locally, but a relink-pending file would wait for good
