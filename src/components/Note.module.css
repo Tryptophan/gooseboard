@@ -61,8 +61,7 @@
   color: var(--text); border: 0; background: transparent; cursor: pointer;
 }
 .toolbar button:hover { background: var(--hover); }
-.toolbar .headingSize { width: auto; padding: 0 6px; font-weight: 700; font-size: 13px; }
-.toolbar .sep { width: 1px; align-self: stretch; margin: 4px 3px; background: var(--border); }
+.toolbar .headingSize { width: auto; padding: 0 6px; font-size: 13px; }
 .toolbar button.on { background: var(--accent-soft); color: var(--accent); }
 .toolbar.bare { padding: 0; border: 0; background: none; box-shadow: none; justify-content: center; }
 .backdrop { position: fixed; inset: 0; z-index: 100; background: rgba(8, 10, 16, 0.6); display: grid; place-items: center; padding: 24px; }

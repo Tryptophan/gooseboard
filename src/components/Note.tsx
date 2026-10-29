@@ -199,14 +199,6 @@ export function NoteToolbar({ editor, variant }: { editor: Editor; variant: 'inl
   const c = () => editor.chain().focus()
   return (
     <div className={`${s.toolbar} ${s[variant]}`} data-nodrag>
-      {B('Bold', 'bold', () => c().toggleBold().run(), editor.isActive('bold'))}
-      {B('Italic', 'italic', () => c().toggleItalic().run(), editor.isActive('italic'))}
-      {B('Strike', 'strike', () => c().toggleStrike().run(), editor.isActive('strike'))}
-      {B('Bullets', 'ul', () => c().toggleBulletList().run(), editor.isActive('bulletList'))}
-      {B('Numbers', 'ol', () => c().toggleOrderedList().run(), editor.isActive('orderedList'))}
-      {B('Checklist', 'check', () => c().toggleTaskList().run(), editor.isActive('taskList'))}
-      {B('Code', 'code', () => c().toggleCodeBlock().run(), editor.isActive('codeBlock'))}
-      <span className={s.sep} />
       <button
         className={s.headingSize}
         title="Heading size"
@@ -229,6 +221,13 @@ export function NoteToolbar({ editor, variant }: { editor: Editor; variant: 'inl
       >
         Aa
       </button>
+      {B('Bold', 'bold', () => c().toggleBold().run(), editor.isActive('bold'))}
+      {B('Italic', 'italic', () => c().toggleItalic().run(), editor.isActive('italic'))}
+      {B('Strike', 'strike', () => c().toggleStrike().run(), editor.isActive('strike'))}
+      {B('Bullets', 'ul', () => c().toggleBulletList().run(), editor.isActive('bulletList'))}
+      {B('Numbers', 'ol', () => c().toggleOrderedList().run(), editor.isActive('orderedList'))}
+      {B('Checklist', 'check', () => c().toggleTaskList().run(), editor.isActive('taskList'))}
+      {B('Code', 'code', () => c().toggleCodeBlock().run(), editor.isActive('codeBlock'))}
     </div>
   )
 }
