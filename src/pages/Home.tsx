@@ -213,7 +213,7 @@ export default function Home() {
             ))}
           </ul>
         )}
-        <button className={s.offline} onClick={() => setLinking(true)} title="Join a board from a device on the same Wi-Fi or hotspot, with no internet, by scanning QR codes (or start a new one together if neither has a board open)">
+        <button className={s.offline} onClick={() => setLinking(true)} title="Join a board from a device on the same Wi-Fi or hotspot, with no internet, by scanning QR codes">
           Join offline peer
         </button>
         {linking && <QrLinkDialog onClose={() => setLinking(false)} />}
