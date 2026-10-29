@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'r
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { leaveLayers } from '../lib/back'
 import { renameBoardLocal, saveProfile, USER_COLORS } from '../lib/storage'
+import { useUpdateReady } from '../net/pwa'
 import { signalStatus } from '../net/signal'
 import { usePeers, useSession } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
@@ -68,6 +69,23 @@ function useBoardName(boardId: string) {
 }
 
 let measurer: CanvasRenderingContext2D | null = null
+
+/** Who you're following, held on screen until you stop. */
+export function FollowBanner() {
+  const { peers } = usePeers()
+  const ui = useUi()
+  const dispatch = useUiDispatch()
+  const stacked = useUpdateReady()
+  const p = ui.follow == null ? undefined : peers.find((q) => q.clientId === ui.follow)
+  if (!p) return null
+  // above the new-version banner when both are up
+  return (
+    <div className={`${s.update} ${stacked ? s.stacked : ''}`} role="status">
+      Following {p.name}
+      <button onClick={() => dispatch({ type: 'follow', clientId: null })}>Cancel</button>
+    </div>
+  )
+}
 
 export function TopBar({ boardId }: { boardId: string }) {
   const location = useLocation()

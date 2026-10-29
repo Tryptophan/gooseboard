@@ -9,7 +9,7 @@ import { Minimap } from '../components/Minimap'
 import { PreviewProvider } from '../components/Preview'
 import { ExportHost } from '../components/ExportDialog'
 import { Toolbar } from '../components/Toolbar'
-import { TopBar } from '../components/TopBar'
+import { FollowBanner, TopBar } from '../components/TopBar'
 import { RelinkBanner, useLeaveGuard } from '../components/TransferPanel'
 import { unionBounds } from '../lib/geometry'
 import { isValidBoardId } from '../lib/ids'
@@ -69,6 +69,7 @@ function Board({ id }: { id: string }) {
         <BoardSurface />
         <TopBar boardId={id} />
         <RelinkBanner />
+        <FollowBanner />
         <FolderPanel />
         <NoteModal />
         <ExportHost />

@@ -246,6 +246,8 @@ export function BoardSurface() {
     if (ui.follow == null) return
     const aw = store.awareness
     let last = ''
+    // keep their cursor mid-screen; while it's off the board, hold its last spot
+    let at: { x: number; y: number } | null = null
     const apply = () => {
       const st = aw.getStates().get(ui.follow!) as Presence | undefined
       if (!st) {
@@ -253,11 +255,14 @@ export function BoardSurface() {
         toast('Stopped following: they left')
         return
       }
-      if (!st.view) return
-      const key = `${st.view.cx},${st.view.cy},${st.view.z}`
+      if (st.cursor) at = st.cursor
+      else if (!at && st.view) at = { x: st.view.cx, y: st.view.cy }
+      if (!at) return
+      const z = st.view?.z ?? camApi.camRef.current.z
+      const key = `${at.x},${at.y},${z}`
       if (key === last) return
       last = key
-      camApi.centerOn(st.view.cx, st.view.cy, st.view.z)
+      camApi.centerOn(at.x, at.y, z)
     }
     apply()
     aw.on('change', apply)
