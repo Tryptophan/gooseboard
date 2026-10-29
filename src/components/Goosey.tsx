@@ -351,7 +351,7 @@ function Storage() {
     void refresh()
   }
   const clearCache = async () => {
-    if (!(await confirmDialog({ title: 'Clear the cache?', message: 'Pieces of files fetched from other people (streamed videos, and downloads and syncs not yet finished), the previews and thumbnails of other people’s files shown on boards, and the thumbnails of what you share are removed. Synced files stay. Unfinished transfers start over, and previews are fetched or made again when needed.', ok: 'Clear', danger: true }))) return
+    if (!(await confirmDialog({ title: 'Clear the board cache?', message: 'Pieces of files fetched from other people (streamed videos, and downloads and syncs not yet finished), the previews and thumbnails of other people’s files shown on boards, and the thumbnails of what you share are removed. Synced files stay. Unfinished transfers start over, and previews are fetched or made again when needed.', ok: 'Clear', danger: true }))) return
     await Promise.all([partial.clear(), clearPreviews(), clearThumbs()])
     void refresh()
   }
@@ -377,12 +377,18 @@ function Storage() {
           </button>
         </li>
         <li title="Pieces of files fetched from other people (up to 2 GB), previews of other people’s pictures (up to 10 GB), and thumbnails of what you share (up to 256 MB), so transfers resume and boards load quickly and offline">
-          <span>Cache</span>
+          <span>Board cache</span>
           <span className={c.muted}>{previews === null || thumbs === null ? '…' : cache.count ? formatSize(cache.bytes) : 'none'}</span>
-          <button title="Clear the cache" disabled={!cache.count} onClick={() => void clearCache()}>
+          <button title="Clear the board cache" disabled={!cache.count} onClick={() => void clearCache()}>
             <Icon name="trash" size={13} />
           </button>
         </li>
+        {usage !== null && previews !== null && thumbs !== null && (
+          <li title="Everything else this browser stores for Gooseboard: boards and their chat, folder listings, saved file handles, reminders, and the app itself. Approximate: browsers round the total.">
+            <span>Other</span>
+            <span className={c.muted}>{formatSize(Math.max(0, usage - (models ?? 0) - files.bytes - cache.bytes))}</span>
+          </li>
+        )}
       </ul>
       <p className={c.muted}>Boards themselves are kept in this browser too; delete them from the home screen.</p>
     </>
