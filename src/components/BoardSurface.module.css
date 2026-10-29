@@ -26,6 +26,7 @@
   position: absolute; left: 0; top: 0; pointer-events: none;
   outline: calc(1.5px / var(--z)) dashed var(--accent); outline-offset: calc(6px / var(--z));
 }
+.groupFrame { position: absolute; inset: calc(-6px / var(--z)); }
 .handle {
   position: absolute; pointer-events: auto; background: var(--panel);
   width: calc(11px / var(--z)); height: calc(11px / var(--z));

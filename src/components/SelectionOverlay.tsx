@@ -19,7 +19,7 @@ export const isResizable = (it: Item) => it.type === 'note' || it.type === 'stro
 /** pictures and videos keep their aspect, so they only get corner handles */
 const handlesFor = (it: Item) => (isMedia(it) ? HANDLES.filter((h) => h.id.length === 2) : HANDLES)
 
-/** Outlines for every selected item; resize/rotate handles when exactly one is selected. */
+/** Outlines for every selected item, with resize/rotate handles on the item, or on the group box when several are selected. */
 export function SelectionOverlay({ items, editing }: { items: Item[]; editing: boolean }) {
   if (!items.length) return null
   const single = items.length === 1 ? items[0] : null
@@ -42,7 +42,17 @@ export function SelectionOverlay({ items, editing }: { items: Item[]; editing: b
           )}
         </div>
       ))}
-      {group && <div className={s.groupBox} style={tf({ ...group, rot: 0 })} />}
+      {group && (
+        <div className={s.groupBox} style={tf({ ...group, rot: 0 })}>
+          {!editing && (
+            <div className={s.groupFrame}>
+              {HANDLES.map((h) => <div key={h.id} className={s.handle} data-handle={h.id} style={{ left: `${h.x * 100}%`, top: `${h.y * 100}%`, cursor: h.cur }} />)}
+              <div className={s.rotStem} />
+              <div className={s.rotHandle} data-handle="rot" />
+            </div>
+          )}
+        </div>
+      )}
     </>
   )
 }

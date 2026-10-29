@@ -6,6 +6,7 @@
   -webkit-user-select: none;
 }
 .item[data-type='stroke'] { pointer-events: none; }
+.item[data-type='stroke'].selected { pointer-events: auto; cursor: pointer; }
 .strokeSvg { overflow: visible; display: block; pointer-events: none; }
 .strokeSvg path { pointer-events: visiblePainted; cursor: pointer; }
 .selected { z-index: 0; }

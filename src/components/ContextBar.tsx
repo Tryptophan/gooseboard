@@ -49,8 +49,8 @@ export function ContextBar({ items }: { items: Item[] }) {
 
   const half = width / 2 + 8
   const left = clamp((b.x + b.w / 2) * cam.z + cam.x, half, Math.max(half, size.w - half))
-  // bottom edge clears the rotate handle (34px above the item), which is hidden while editing
-  const above = b.y * cam.z + cam.y - (only && !editing ? 50 : 12)
+  // bottom edge clears the rotate handle (34px above the item, 40px above a group's box), which is hidden while editing
+  const above = b.y * cam.z + cam.y - (editing ? 12 : only ? 50 : 56)
   const flip = above - (ref.current?.offsetHeight ?? (textEditor ? 84 : 42)) < 70
   const top = flip ? (b.y + b.h) * cam.z + cam.y + 14 : above
 

@@ -24,7 +24,7 @@ import { promptDialog } from './Dialog'
 import { canPreview, usePreview } from './Preview'
 import { ItemView } from './Items'
 import { RemoteLayer } from './RemoteLayer'
-import { SelectionOverlay } from './SelectionOverlay'
+import { isResizable, SelectionOverlay } from './SelectionOverlay'
 import s from './BoardSurface.module.css'
 
 type Inter =
@@ -35,11 +35,16 @@ type Inter =
   /** finger scrolling a long note being edited */
   | { kind: 'scroll'; el: HTMLElement; sy: number; st: number; active: boolean }
   | { kind: 'marquee'; start: Vec; base: string[] }
-  | { kind: 'resize'; id: string; handle: string; orig: { x: number; y: number; w: number; h: number; rot: number } }
-  | { kind: 'rotate'; id: string; c: Vec; startAngle: number; origRot: number }
+  | { kind: 'resize'; id: string; handle: string; orig: Box }
+  /** the box around several selected items; `orig` holds each item's starting box */
+  | { kind: 'groupResize'; handle: string; box: Rect; orig: Map<string, Box> }
+  /** spins the selection about `c`; one item turns about its own centre */
+  | { kind: 'rotate'; c: Vec; startAngle: number; orig: Map<string, Box> }
   | { kind: 'draw'; points: number[] }
   | { kind: 'erase' }
   | { kind: 'pinch'; d0: number; c0: Vec; cam0: Cam }
+
+type Box = { x: number; y: number; w: number; h: number; rot: number }
 
 type MenuEvent = { target: EventTarget; clientX: number; clientY: number; preventDefault(): void; stopPropagation(): void }
 
@@ -472,15 +477,17 @@ export function BoardSurface() {
 
     // select tool
     host.setPointerCapture(e.pointerId)
-    const only = u.selection.length === 1 ? snapRef.current.all.get(u.selection[0]) : undefined
-    if (handleEl && only) {
+    const picked = u.selection.map((sid) => snapRef.current.all.get(sid)).filter((i): i is Item => !!i)
+    if (handleEl && picked.length) {
       store.undo.stopCapturing()
-      const o = { x: only.x, y: only.y, w: only.w, h: only.h, rot: only.rot }
+      const orig = new Map<string, Box>(picked.map((i) => [i.id, { x: i.x, y: i.y, w: i.w, h: i.h, rot: i.rot }]))
+      const box = picked.length === 1 ? picked[0] : unionBounds(picked)!
       setMoving(true)
       if (handleEl.dataset.handle === 'rot') {
-        const c = { x: o.x + o.w / 2, y: o.y + o.h / 2 }
-        inter.current = { kind: 'rotate', id: only.id, c, startAngle: Math.atan2(wp.y - c.y, wp.x - c.x), origRot: o.rot }
-      } else inter.current = { kind: 'resize', id: only.id, handle: handleEl.dataset.handle!, orig: o }
+        const c = { x: box.x + box.w / 2, y: box.y + box.h / 2 }
+        inter.current = { kind: 'rotate', c, startAngle: Math.atan2(wp.y - c.y, wp.x - c.x), orig }
+      } else if (picked.length === 1) inter.current = { kind: 'resize', id: picked[0].id, handle: handleEl.dataset.handle!, orig: orig.get(picked[0].id)! }
+      else inter.current = { kind: 'groupResize', handle: handleEl.dataset.handle!, box, orig }
       return
     }
     if (id) {
@@ -616,10 +623,59 @@ export function BoardSurface() {
         store.update(it.id, { x: Math.round(c.x - w / 2), y: Math.round(c.y - h / 2), w: Math.round(w), h: Math.round(h) })
         return
       }
+      case 'groupResize': {
+        const { box: b, handle } = it
+        const sx = handle.includes('e') ? 1 : handle.includes('w') ? -1 : 0
+        const sy = handle.includes('s') ? 1 : handle.includes('n') ? -1 : 0
+        // the opposite edge or corner stays put
+        const ax = sx > 0 ? b.x : b.x + b.w
+        const ay = sy > 0 ? b.y : b.y + b.h
+        const min = 20
+        let kx = sx ? Math.max(min, sx * (wp.x - ax)) / b.w : 1
+        let ky = sy ? Math.max(min, sy * (wp.y - ay)) / b.h : 1
+        // corners keep the group's aspect unless Shift is held
+        if (sx && sy && !e.shiftKey) kx = ky = Math.max(kx, ky)
+        const nx = sx > 0 ? ax : sx < 0 ? ax - b.w * kx : b.x
+        const ny = sy > 0 ? ay : sy < 0 ? ay - b.h * ky : b.y
+        const all = snapRef.current.all
+        const patches: Record<string, Record<string, number>> = {}
+        it.orig.forEach((o, id) => {
+          const item = all.get(id)
+          if (!item) return
+          const cx = nx + (o.x + o.w / 2 - b.x) * kx
+          const cy = ny + (o.y + o.h / 2 - b.y) * ky
+          let w = o.w
+          let h = o.h
+          // file cards, folders, and link cards ride along at their own size
+          if (isResizable(item)) {
+            // stretch along the item's own axes, so a turned item scales with the box around it
+            const cos = Math.cos(o.rot)
+            const sin = Math.sin(o.rot)
+            let fw = Math.hypot(kx * cos, ky * sin)
+            let fh = Math.hypot(kx * sin, ky * cos)
+            if (isMedia(item)) fw = fh = Math.sqrt(fw * fh)
+            w = Math.max(Math.min(o.w, 8), o.w * fw)
+            h = Math.max(Math.min(o.h, 8), o.h * fh)
+          }
+          patches[id] = { x: Math.round(cx - w / 2), y: Math.round(cy - h / 2), w: Math.round(w), h: Math.round(h) }
+        })
+        store.updateMany(patches)
+        return
+      }
       case 'rotate': {
-        let rot = it.origRot + (Math.atan2(wp.y - it.c.y, wp.x - it.c.x) - it.startAngle)
-        if (e.shiftKey) rot = snapAngle(rot)
-        store.update(it.id, { rot })
+        let da = Math.atan2(wp.y - it.c.y, wp.x - it.c.x) - it.startAngle
+        const patches: Record<string, Record<string, number>> = {}
+        if (it.orig.size === 1) {
+          const [[id, o]] = [...it.orig]
+          patches[id] = { rot: e.shiftKey ? snapAngle(o.rot + da) : o.rot + da }
+        } else {
+          if (e.shiftKey) da = snapAngle(da)
+          it.orig.forEach((o, id) => {
+            const p = rotate({ x: o.x + o.w / 2 - it.c.x, y: o.y + o.h / 2 - it.c.y }, da)
+            patches[id] = { x: Math.round(it.c.x + p.x - o.w / 2), y: Math.round(it.c.y + p.y - o.h / 2), rot: o.rot + da }
+          })
+        }
+        store.updateMany(patches)
         return
       }
       case 'draw': {
@@ -692,6 +748,7 @@ export function BoardSurface() {
         setMarquee(null)
         break
       case 'resize':
+      case 'groupResize':
       case 'rotate':
         setMoving(false)
         break
