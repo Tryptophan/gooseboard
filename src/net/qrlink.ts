@@ -1,4 +1,5 @@
-import { isValidPacket, QWBPConnection, QWBPTimeoutError } from 'qwbp'
+import { decode, isValidPacket, QWBPConnection, QWBPTimeoutError } from 'qwbp'
+import { diag } from '../lib/diag'
 import { getProfile } from '../lib/storage'
 import { mesh } from './signal'
 import type { MeshChannel, MeshMsg } from './signal/mesh'
@@ -38,6 +39,17 @@ export type LinkState =
   | { s: 'done'; peer: string; board: BoardRef; join: boolean }
   | { s: 'failed'; msg: string }
 
+/** Kinds of addresses in a code, for diagnostics (never the addresses themselves). */
+function kinds(code: Uint8Array) {
+  const out: Record<string, number> = {}
+  for (const c of decode(code).candidates) {
+    const k = `${c.ip.endsWith('.local') ? 'mdns' : c.ip.includes(':') ? 'ipv6' : 'ipv4'}/${c.protocol}`
+    out[k] = (out[k] ?? 0) + 1
+  }
+  return out
+}
+const mdnsOnly = (code: Uint8Array) => decode(code).candidates.every((c) => c.ip.endsWith('.local'))
+
 /** How long the codes stay valid. */
 const TIMEOUT_MS = 10 * 60_000
 
@@ -58,14 +70,26 @@ export class QrLink {
   private theyStay = false
   private closed = false
   private hiTimer: ReturnType<typeof setInterval> | undefined
+  private mine?: Uint8Array
+  private theirs?: Uint8Array
 
-  /** `board`: the board this device started from (none from the home screen) */
-  constructor(private board?: BoardRef) {
+  /**
+   * `board`: the board this device started from (none from the home screen). `camera`: the
+   * camera being opened, waited for before the code is made: browsers hide a device's LAN address
+   * behind a random .local name unless the page is capturing, and those names often can't be
+   * resolved by the other device (Android, Linux), so with both sides hidden nothing connects.
+   */
+  constructor(
+    private board?: BoardRef,
+    private camera?: Promise<unknown>,
+  ) {
     open.forEach((l) => l.cancel())
     open.add(this)
     this.qwbp = new QWBPConnection({
       // no internet: host candidates are all there is, and STUN would only stall gathering
       iceServers: [],
+      // past QWBP's 4: TCP placeholders and extra interfaces (docker, VPN, cellular) can crowd out the LAN one
+      maxCandidates: 6,
       timeout: TIMEOUT_MS,
       onDataChannel: (ch) => this.opened(ch),
       onError: (e) => this.failed(e),
@@ -75,8 +99,13 @@ export class QrLink {
 
   private async start() {
     try {
+      await this.camera?.catch(() => {})
+      if (this.closed) return
       await this.qwbp.initialize()
-      if (!this.closed) this.set({ s: 'ready', qr: this.qwbp.getQRPayload(), scanned: false })
+      if (this.closed) return
+      this.mine = this.qwbp.getQRPayload()
+      diag('qrlink', 'code', kinds(this.mine))
+      this.set({ s: 'ready', qr: this.mine, scanned: false })
     } catch (e) {
       this.failed(e)
     }
@@ -94,13 +123,18 @@ export class QrLink {
   }
 
   private failed(e: unknown) {
+    // after the handover, the bootstrap closing is expected
     if (this.closed || this.state.s === 'done') return this.teardown()
+    diag('qrlink', 'failed', { error: e, state: this.state.s })
+    const hidden = this.mine && this.theirs && mdnsOnly(this.mine) && mdnsOnly(this.theirs)
     const msg =
       e instanceof QWBPTimeoutError
         ? 'The codes expired. Start again to get new ones.'
         : e instanceof Error && /gathering/i.test(e.message)
           ? 'No network found. Join the same Wi-Fi or hotspot as the other device.'
-          : 'Couldn’t connect. Both devices need to be on the same network.'
+          : hidden
+            ? 'Couldn’t reach the other device: neither browser shared its local address. Allow camera access on at least one of them, then try again.'
+            : 'Couldn’t connect. Check both devices are on the same Wi-Fi or hotspot, and that it lets devices see each other (guest networks often don’t).'
     this.set({ s: 'failed', msg })
     this.teardown()
   }
@@ -116,6 +150,8 @@ export class QrLink {
       this.set({ ...st, scanned: true })
       // my code stays up: the channel opens once they have scanned it too
       await this.qwbp.processScannedPayload(bytes)
+      this.theirs = bytes
+      diag('qrlink', 'scanned', kinds(bytes))
       return true
     } catch {
       if (this.state.s === 'ready') this.set({ ...this.state, scanned: false })

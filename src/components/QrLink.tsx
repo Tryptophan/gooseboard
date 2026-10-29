@@ -28,23 +28,26 @@ function pixels(src: CanvasImageSource, w: number, h: number, max: number, canva
   return ctx.getImageData(0, 0, canvas.width, canvas.height)
 }
 
-/** Reads QR codes from the camera while `on`; `err` when there's no camera or it was refused. */
-function useScanner(on: boolean, onCode: (b: Uint8Array) => void) {
+const openCamera = (): Promise<MediaStream> =>
+  navigator.mediaDevices ? navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }) : Promise.reject(new Error('no camera'))
+const stopCamera = (cam: Promise<MediaStream> | null) => void cam?.then((m) => m.getTracks().forEach((t) => t.stop()), () => {})
+
+/** Reads QR codes from `camera` while `on`; `err` when there's no camera or it was refused. */
+function useScanner(on: boolean, camera: Promise<MediaStream> | null, onCode: (b: Uint8Array) => void) {
   const video = useRef<HTMLVideoElement>(null)
   const [err, setErr] = useState(false)
   const cb = useRef(onCode)
   cb.current = onCode
   useEffect(() => {
-    if (!on) return
+    if (!on || !camera) return
     let stop = false
-    let stream: MediaStream | null = null
     let timer: ReturnType<typeof setTimeout> | undefined
     const canvas = document.createElement('canvas')
     void (async () => {
       try {
         const decode = await loadDecoder()
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
-        if (stop) return stream.getTracks().forEach((t) => t.stop())
+        const stream = await camera
+        if (stop) return
         const v = video.current!
         v.srcObject = stream
         await v.play().catch(() => {})
@@ -65,9 +68,8 @@ function useScanner(on: boolean, onCode: (b: Uint8Array) => void) {
     return () => {
       stop = true
       clearTimeout(timer)
-      stream?.getTracks().forEach((t) => t.stop())
     }
-  }, [on])
+  }, [on, camera])
   return { video, err }
 }
 
@@ -84,17 +86,30 @@ export function QrLinkDialog({ board, onClose }: { board?: BoardRef; onClose: ()
   // made in an effect, so each attempt is one QWBP connection that is closed with it
   const [attempt, setAttempt] = useState(0)
   const [link, setLink] = useState<QrLink | null>(null)
+  // opened before the code is made, so the browser puts this device's LAN address in it (see QrLink)
+  const [camera, setCamera] = useState<Promise<MediaStream> | null>(null)
   const boardRef = useRef(board)
   useEffect(() => {
-    const l = new QrLink(boardRef.current)
+    const cam = openCamera()
+    cam.catch(() => {})
+    const l = new QrLink(boardRef.current, cam)
     setLink(l)
-    return () => l.cancel()
+    setCamera(cam)
+    return () => {
+      l.cancel()
+      stopCamera(cam)
+    }
   }, [attempt])
   const st = useSyncExternalStore(link?.subscribe ?? noSub, link?.getState ?? (() => STARTING))
   const [photoMsg, setPhotoMsg] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const scanning = st.s === 'ready' && !st.scanned
-  const { video, err } = useScanner(scanning, (b) => void link?.scan(b))
+  const { video, err } = useScanner(scanning, camera, (b) => void link?.scan(b))
+  // kept on while connecting (in case the connection gathers addresses again), off once it's decided
+  const settled = st.s === 'choose' || st.s === 'done' || st.s === 'failed'
+  useEffect(() => {
+    if (settled) stopCamera(camera)
+  }, [settled, camera])
 
   const close = () => {
     link?.cancel()
