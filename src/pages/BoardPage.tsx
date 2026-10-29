@@ -7,7 +7,6 @@ import { NoteModal } from '../components/Note'
 import { Icon } from '../components/Icons'
 import { Minimap } from '../components/Minimap'
 import { PreviewProvider } from '../components/Preview'
-import { Toasts } from '../components/Toasts'
 import { Toolbar } from '../components/Toolbar'
 import { TopBar } from '../components/TopBar'
 import { RelinkBanner, useLeaveGuard } from '../components/TransferPanel'
@@ -74,7 +73,6 @@ function Board({ id }: { id: string }) {
           <ZoomControls />
         </div>
         <Minimap />
-        <Toasts />
         <CameraSaver id={id} />
       </PreviewProvider>
     </CameraProvider>

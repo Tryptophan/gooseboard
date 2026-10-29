@@ -8,7 +8,7 @@ export function Toasts() {
     () =>
       onToast((t) => {
         setList((l) => [...l.slice(-3), t])
-        setTimeout(() => setList((l) => l.filter((x) => x.id !== t.id)), t.action ? 9000 : 3800)
+        setTimeout(() => setList((l) => l.filter((x) => x.id !== t.id)), t.ms ?? (t.action ? 9000 : 3800))
       }),
     [],
   )

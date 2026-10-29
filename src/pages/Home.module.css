@@ -36,10 +36,12 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .profile { margin-top: 36px; }
 .profile p { color: var(--muted); margin: 0 0 10px; }
 .profileRow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.profileRow input { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); min-width: 200px; }
+.profileRow input { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); flex: 1; min-width: 200px; }
 .me { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; flex: none; }
 .sw { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--border); cursor: pointer; padding: 0; }
 .swOn { box-shadow: 0 0 0 2px var(--accent); }
+.sub { margin: 22px 0 4px; font-size: 14px; }
+.reminders p { margin: 0; }
 .foot { margin-top: 40px; color: var(--muted); font-size: 12.5px; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 16px; }
 .source { margin: 10px 0 0; }
 

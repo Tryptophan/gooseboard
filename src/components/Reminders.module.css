@@ -1,0 +1,48 @@
+/* reminders: in Goosey's menu and on the home screen, so only shared tokens here */
+.wrap { display: grid; gap: 8px; padding-top: 6px; font-size: 13px; }
+.add {
+  justify-self: start; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; background: var(--accent); color: #fff;
+  font: inherit; font-weight: 600; padding: 6px 12px; cursor: pointer;
+}
+.note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--hover); color: var(--muted); line-height: 1.4; }
+.fine { margin: 2px 0 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+
+.form { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+.form input, .form select { min-width: 0; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: inherit; }
+.form select {
+  padding-right: 28px; cursor: pointer; appearance: none; -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 15px) 55%, calc(100% - 10px) 55%; background-size: 5px 5px; background-repeat: no-repeat;
+}
+.text { width: 100%; box-sizing: border-box; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; }
+.row input[type='date'] { flex: 1 1 130px; }
+.row input[type='time'] { flex: 1 1 90px; }
+.row select { flex: 1 1 110px; }
+.days { display: flex; gap: 4px; }
+.days button { flex: 1; padding: 5px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.days .on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.warn { margin: 0; color: var(--danger); font-size: 12px; }
+.actions { display: flex; justify-content: flex-end; gap: 6px; }
+.actions button { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; font-weight: 600; padding: 6px 12px; cursor: pointer; }
+.actions .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.actions .primary:disabled { opacity: 0.45; cursor: default; }
+
+.list.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+/* doubled to outdo the popover's own list rules (Goosey's menu is one) */
+.list.list li { font-family: inherit; font-size: inherit; white-space: normal; overflow: visible; }
+.list.list li { display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); min-width: 0; }
+.list li > button { border: 0; background: transparent; color: var(--muted); font: inherit; cursor: pointer; border-radius: 7px; }
+.list li > button:hover { background: var(--hover); color: var(--text); }
+.item { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 5px 8px; text-align: left; }
+.item b { max-width: 100%; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item span { font-size: 12px; }
+.done .item b { color: var(--muted); text-decoration: line-through; }
+.board { flex: 0 1 auto; max-width: 35%; padding: 5px 8px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.del { flex: none; width: 28px; height: 28px; display: grid; place-items: center; }
+.list .del:hover { color: var(--danger); }
+
+/* iOS zooms into inputs under 16px */
+@media (pointer: coarse) {
+  .form input, .form select { font-size: 16px; }
+}

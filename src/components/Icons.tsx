@@ -44,6 +44,10 @@ const P: Record<string, ReactNode> = {
   cloudDown: <path d="M7 18a4.5 4.5 0 01-.6-8.96A6 6 0 0118 8.5a4.25 4.25 0 01-.5 8.47M12 11v9M8.5 16.5L12 20l3.5-3.5" />,
   mic: <path d="M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zM5 11a7 7 0 0014 0M12 18v3" />,
   lock: <path d="M6 11h12v9H6zM8 11V8a4 4 0 018 0v3" />,
+  chat: <path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v9a2 2 0 01-2 2h-7l-5 4v-4H6a2 2 0 01-2-2z" />,
+  bell: <path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15zM10 20.5a2 2 0 004 0" />,
+  sliders: <path d="M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4" />,
+  help: <path d="M12 21a9 9 0 100-18 9 9 0 000 18zM9.5 9.5a2.5 2.5 0 114 2c-1 .7-1.5 1.2-1.5 2.5M12 17h.01" />,
 }
 
 export function Icon({ name, size = 20 }: { name: keyof typeof P | string; size?: number }) {

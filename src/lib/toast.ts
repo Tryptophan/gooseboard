@@ -4,6 +4,8 @@ export interface ToastMsg {
   id: number
   text: string
   action?: { label: string; run: () => void }
+  /** how long it stays up, ms */
+  ms?: number
 }
 
 type L = (t: ToastMsg) => void
@@ -15,9 +17,9 @@ export const onToast = (l: L) => {
   return () => void listeners.delete(l)
 }
 
-export function toast(text: string, action?: ToastMsg['action']) {
+export function toast(text: string, action?: ToastMsg['action'], ms?: number) {
   diag('toast', text)
-  const t = { id: seq++, text, action }
+  const t = { id: seq++, text, action, ms }
   listeners.forEach((l) => l(t))
 }
 

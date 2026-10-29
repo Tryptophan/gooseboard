@@ -5,6 +5,7 @@ import { AUTO_SYNC_CHOICES, getAutoSyncMax, setAutoSyncMax, subscribeAutoSync } 
 import { voice } from '../ai/voice'
 import { collectDiag } from '../lib/diag'
 import { formatSize } from '../lib/files'
+import { getBoards } from '../lib/storage'
 import { chatLog } from '../model/chat'
 import type { ThemePref } from '../lib/storage'
 import { toast } from '../lib/toast'
@@ -16,6 +17,7 @@ import { useUi, useUiDispatch } from '../state/ui'
 import { confirmDialog } from './Dialog'
 import { Icon } from './Icons'
 import { ChatTab } from './GooseyChat'
+import { Reminders } from './Reminders'
 import { install } from './Install'
 import { TransfersTab, useTransferProgress } from './TransferPanel'
 import c from './Chrome.module.css'
@@ -26,7 +28,7 @@ const useGoosey = () => useSyncExternalStore(subscribeGoosey, getGoosey)
 /** Most-recent pointer position, for Goosey's glances. */
 const pointer = { x: -1, y: -1 }
 
-/** Goosey: the helper goose in the bottom-left corner. Click him for chat, settings, and help. */
+/** Goosey: the helper goose in the bottom-left corner. Click him for chat, reminders, settings, and help. */
 export function Goosey() {
   const { menu } = useGoosey()
   return (
@@ -44,6 +46,8 @@ function Character({ open }: { open: boolean }) {
   const ref = useRef<HTMLButtonElement>(null)
   const [look, setLook] = useState(0)
   const [hop, setHop] = useState(false)
+  // a hovered goose sways faster
+  const [hover, setHover] = useState(false)
   const glanceRef = useRef<(force?: boolean) => void>(() => {})
 
   // glance toward the pointer when something happens (an edit, yours or a peer's, or someone
@@ -93,22 +97,24 @@ function Character({ open }: { open: boolean }) {
     <button
       ref={ref}
       className={`${s.goose} ${hop ? s.hop : ''}`}
-      aria-label="Goosey: chat, settings, and help"
+      aria-label="Goosey: chat, reminders, settings, and help"
       aria-expanded={open}
       onClick={() => {
         setHop(true)
         openMenu(open ? null : 'chat')
       }}
       onAnimationEnd={(e) => e.animationName.includes('hop') && setHop(false)}
+      onPointerEnter={(e) => e.pointerType === 'mouse' && setHover(true)}
+      onPointerLeave={() => setHover(false)}
       data-goosey-toggle
     >
       {/* with the menu open he keeps a slight tilt back */}
-      <GooseyArt look={look || (open ? -8 : 0)} />
+      <GooseyArt look={look || (open ? -8 : 0)} quick={hover} />
     </button>
   )
 }
 
-/** A ring on Goosey's shoulder while files move: how far along, and how many. Opens the Transfers tab. */
+/** A ring on Goosey's left shoulder while files move: how far along all of them are, together. Opens the Transfers tab. */
 function TransferBadge() {
   const { count, pct } = useTransferProgress()
   if (!count) return null
@@ -120,12 +126,12 @@ function TransferBadge() {
         <circle cx="12" cy="12" r={r} className={s.ringBg} />
         <circle cx="12" cy="12" r={r} className={s.ring} strokeDasharray={len} strokeDashoffset={len * (1 - pct)} />
       </svg>
-      <span>{count}</span>
+      <Icon name="transfers" size={11} />
     </button>
   )
 }
 
-/** Unread chat messages, on Goosey's other shoulder. Opens the Chat tab. */
+/** Unread chat messages, on Goosey's right shoulder. Opens the Chat tab. */
 function ChatBadge() {
   const { store } = useSession()
   const log = chatLog(store)
@@ -139,9 +145,24 @@ function ChatBadge() {
   )
 }
 
-/** The Gooseboard logo, bigger and alive: the neck sways and glances, the eye blinks. */
-function GooseyArt({ look = 0 }: { look?: number }) {
+const calm = matchMedia('(prefers-reduced-motion: reduce)')
+const useCalm = () =>
+  useSyncExternalStore(
+    (l) => {
+      calm.addEventListener('change', l)
+      return () => calm.removeEventListener('change', l)
+    },
+    () => calm.matches,
+  )
+
+/**
+ * The Gooseboard logo, bigger and alive: the neck sways and glances, the eye blinks. The sway and
+ * blink are SMIL, not CSS: Chrome draws an SVG element under a running CSS transform animation on
+ * a layer of its own, without anti-aliasing, and the tilted neck's edge goes jagged.
+ */
+function GooseyArt({ look = 0, quick = false }: { look?: number; quick?: boolean }) {
   const neck = 'M22 70V23a9 9 0 0 1 9-9c4 0 7 2 9 4l1 .5V28.5L40 29v41z'
+  const still = useCalm()
   return (
     <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden className={s.art}>
       <defs>
@@ -151,11 +172,14 @@ function GooseyArt({ look = 0 }: { look?: number }) {
       </defs>
       <rect width="64" height="64" rx="14" className={s.tile} />
       <g clipPath="url(#goosey-tile)">
-        <g className={s.neck}>
-          <g className={s.head} style={{ transform: `rotate(${look}deg)` }}>
+        <g>
+          {!still && <animateTransform attributeName="transform" type="translate" values="0 0; 0 1.5; 0 0" keyTimes="0; 0.5; 1" calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1" dur={quick ? '1.4s' : '3.2s'} repeatCount="indefinite" />}
+          <g className={s.head} style={{ rotate: `${look}deg` }}>
             <path d={neck} className={s.white} />
             <path d="M40 18l11 5.5c1 .5 1 1.5 0 2L40 29z" className={s.beak} />
-            <circle cx="32" cy="21.5" r="2.2" className={s.eye} />
+            <ellipse cx="32" cy="21.5" rx="2.2" ry="2.2" className={s.eye}>
+              {!still && <animate attributeName="ry" values="2.2; 2.2; 0.22; 2.2" keyTimes="0; 0.94; 0.96; 1" dur="5.5s" repeatCount="indefinite" />}
+            </ellipse>
           </g>
         </g>
       </g>
@@ -195,11 +219,13 @@ function useMenuBackEntry() {
 }
 let menuEntries = 0
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'chat', label: 'Chat' },
-  { id: 'settings', label: 'Settings' },
-  { id: 'transfers', label: 'Transfers' },
-  { id: 'help', label: 'Help' },
+/** labelled on a computer, icons on a phone (Goosey.module.css) */
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'chat', label: 'Chat', icon: 'chat' },
+  { id: 'reminders', label: 'Reminders', icon: 'bell' },
+  { id: 'transfers', label: 'Transfers', icon: 'transfers' },
+  { id: 'settings', label: 'Settings', icon: 'sliders' },
+  { id: 'help', label: 'Help', icon: 'help' },
 ]
 
 function Menu({ tab }: { tab: Tab }) {
@@ -223,19 +249,29 @@ function Menu({ tab }: { tab: Tab }) {
     <div className={`${c.popover} ${s.bubble} ${s.menu}`} ref={ref} role="group" aria-label="Goosey" onKeyDown={(e) => e.stopPropagation()}>
       <div className={s.tabs} role="tablist">
         {TABS.map((t) => (
-          <button key={t.id} role="tab" aria-selected={t.id === tab} className={t.id === tab ? s.on : ''} onClick={() => openMenu(t.id)}>
-            {t.label}
+          <button key={t.id} role="tab" aria-label={t.label} aria-selected={t.id === tab} className={t.id === tab ? s.on : ''} onClick={() => openMenu(t.id)}>
+            <span className={s.tabIcon}>
+              <Icon name={t.icon} size={18} />
+            </span>
+            <span className={s.tabLabel}>{t.label}</span>
           </button>
         ))}
       </div>
       <div className={`${s.page} ${tab === 'chat' ? s.chatPage : ''}`}>
         {tab === 'chat' && <ChatTab />}
+        {tab === 'reminders' && <RemindersTab />}
         {tab === 'settings' && <Settings />}
         {tab === 'transfers' && <TransfersTab />}
         {tab === 'help' && <Help />}
       </div>
     </div>
   )
+}
+
+/** Reminders made here open this board from their notification. */
+function RemindersTab() {
+  const { id, store } = useSession()
+  return <Reminders board={{ id, name: store.name || getBoards().find((b) => b.id === id)?.name || '' }} />
 }
 
 const THEMES: { id: ThemePref; label: string }[] = [
@@ -403,6 +439,7 @@ function Help() {
         <li>{coarse ? 'Add files, folders, and links from the toolbar.' : 'Drop or paste files, folders, images, and links anywhere.'}</li>
         <li>Press the mic in the toolbar and talk: what you say is written into a note, live for everyone. Speech is recognised on your device.</li>
         <li>Chat with everyone on the board in the Chat tab; press its mic to say your message instead of typing it.</li>
+        <li>Set yourself a reminder, once or repeating, in the Reminders tab. It goes off as a notification while Gooseboard is open.</li>
         <li>{coarse ? 'Hold' : 'Right-click'} anything for more options.</li>
         <li>{coarse ? 'Tap' : 'Click'} someone’s goose in the top right to follow their view.</li>
       </ul>

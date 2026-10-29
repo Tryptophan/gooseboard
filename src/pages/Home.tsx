@@ -8,6 +8,7 @@ import { watchPresence } from '../net/presence'
 import { AvatarStack, Goose, useBudget } from '../components/Avatars'
 import { confirmDialog, copyDialog, promptDialog } from '../components/Dialog'
 import { Icon } from '../components/Icons'
+import { Reminders } from '../components/Reminders'
 import { install } from '../components/Install'
 import { useInstallWay } from '../net/pwa'
 import { useThemeToggle } from '../state/ui'
@@ -220,6 +221,10 @@ export default function Home() {
               aria-label={`Color ${c}`}
             />
           ))}
+        </div>
+        <h3 className={s.sub}>Reminders</h3>
+        <div className={s.reminders}>
+          <Reminders onOpenBoard={openBoard} />
         </div>
       </section>
 

@@ -1,6 +1,8 @@
-# Gooseboard
+# <img src="public/favicon.svg" alt="" width="36" height="36" align="top"> Gooseboard
 
 A simple collaborative decentralized workspace for notes, drawings, files, and folders, shared live between browsers. No accounts or cloud: open [gooseboard.io](https://gooseboard.io), share the link, and everyone with it edits the same board in real time, peer to peer.
+
+![Gooseboard logo beside a shared board: a checklist note circled in pen, a photo, a video, a folder shared from disk, a voice note still being written, the board chat, and a friend’s named cursor](public/og.png)
 
 ## Features
 
@@ -15,12 +17,18 @@ A simple collaborative decentralized workspace for notes, drawings, files, and f
 - Select, move, resize, rotate, duplicate, reorder, copy/cut/paste between boards, and undo/redo everything.
 
 **Goosey**
-- Goosey, the big goose in the bottom-left corner, holds the menus: *Chat* (below), *Settings* (theme, syncing, and storage used by the speech model and cached files, with buttons to clear them), *Transfers* (every file moving to or from you, streamed videos included, with progress, cancel, and errors), and *Help* (getting started, keyboard shortcuts or touch gestures on phones and tablets, and a *Copy diagnostics* button that puts a JSON report of this browser, this device, and the app's recent activity on the clipboard, with names, ids, and anything people wrote left out).
-- While files are moving, a progress ring sits on his shoulder, and closing the tab asks first. New chat messages put an unread count on his other shoulder.
+- Goosey, the big goose in the bottom-left corner, holds the menus (labelled on a computer, icons on a phone): *Chat* (below), *Reminders* (below), *Transfers* (every file moving to or from you, streamed videos included, with progress, cancel, and errors), *Settings* (theme, syncing, and storage used by the speech model and cached files, with buttons to clear them), and *Help* (getting started, keyboard shortcuts or touch gestures on phones and tablets, and a *Copy diagnostics* button that puts a JSON report of this browser, this device, and the app's recent activity on the clipboard, with names, ids, and anything people wrote left out).
+- While files are moving, a progress ring sits on his left shoulder, and closing the tab asks first. New chat messages put an unread count on his right shoulder.
 
 **Chat**
 - Everyone on a board can chat in Goosey's *Chat* tab. Messages are kept with the board, so people who join later, or come back online, see the history.
+- Your messages carry a tick: a clock until someone else has it, ✓ once at least one person has received it, and a blue ✓✓ once at least one person has read it (had the chat open, with the page in front). Click a message, or hold it on a phone, for everyone on the board and when each received and read it.
 - The mic beside the message box dictates: what you say is written into the box, on your device, to edit and send.
+
+**Reminders**
+- Set yourself a reminder from Goosey's *Reminders* tab, or under *You* on the home screen: some text, a date and time, and whether it repeats (every day, weekdays, weekly on the days you pick, or monthly). One made on a board opens that board when you click it.
+- Reminders are yours alone: they're kept in this browser and never shared with the board. They go off as a system notification (Gooseboard asks for permission when you add your first one), or as a message inside the app if notifications are blocked or unsupported.
+- With no server, nothing can wake a closed Gooseboard: a reminder goes off while Gooseboard is open, in any tab or as the installed app. One that came due while it was closed goes off, marked missed, the next time you open it; a repeating one then waits for its next time.
 
 **Voice notes on your device**
 - Speech recognition runs entirely in your browser: [Silero VAD](https://github.com/snakers4/silero-vad) picks the speech out of the mic, so pauses and background noise never reach the recogniser (which is what makes it invent words), then Whisper Tiny turns each sentence into text. Your voice never leaves the device.
@@ -49,7 +57,8 @@ A simple collaborative decentralized workspace for notes, drawings, files, and f
 - **No server.** Peers find each other through public Nostr relays and WebTorrent trackers, used at the same time, so any one of them being down is fine. Every handshake is encrypted with the board id, so relays see only ciphertext and people without the link can't join. There is no TURN relay, so very strict NATs may fail to connect.
 - **Private links.** A board lives at `/#/board/<12-char id>`, and that id is the key, so share links only with people you want on the board.
 - **Voice notes** run [transformers.js](https://huggingface.co/docs/transformers.js) in a Web Worker, with weights from Hugging Face's `onnx-community/whisper-tiny` kept in the browser's Cache API. Silero VAD ([vad-web](https://github.com/ricky0123/vad)) runs on the page from an audio worklet; its model and ONNX Runtime's wasm are bundled under `/vad/`, so no CDN is involved. Each utterance the VAD ends is transcribed in turn and appended to the note as a paragraph; known Whisper hallucinations ("thanks for watching", `[BLANK_AUDIO]`, and the like) are dropped.
-- **Chat** is a Y.Array of messages in the board's Yjs document. Dictation uses the same Silero VAD and Whisper as voice notes, handing each utterance to the message box instead of a note.
+- **Reminders** live in `localStorage`. Every open tab watches them, and a Web Lock makes sure only one tab sets each one off. Notifications go through the service worker, which also handles clicks on them.
+- **Chat** is a Y.Array of messages in the board's Yjs document. Everyone who opens a board is added to its `members` map, with how far through the chat they've received and read as a short list of `[count, time]` steps, which is all the ticks and details need. Dictation uses the same Silero VAD and Whisper as voice notes, handing each utterance to the message box instead of a note.
 - **Offline app.** One service worker (`public/stream-sw.js`) streams media, precaches the build (the build writes its file list and a content hash into it), and receives the share target. Voice notes' wasm and models still download when first used.
 - **Files** never enter the shared document. Their bytes go over the same data channels in chunks, with backpressure and resume, and are checked against a SHA-256 content hash. Chromium remembers shared files across reloads. Firefox asks the owner to re-pick them when someone needs one.
 

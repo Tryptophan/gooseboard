@@ -3,7 +3,7 @@
  * tab. A module store (like lib/toast) so anything can open it.
  */
 
-export type Tab = 'chat' | 'settings' | 'transfers' | 'help'
+export type Tab = 'chat' | 'reminders' | 'settings' | 'transfers' | 'help'
 
 interface State {
   menu: Tab | null

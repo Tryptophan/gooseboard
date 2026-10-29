@@ -51,6 +51,22 @@ self.addEventListener('message', (e) => {
   if (e.data === 'gooseboard-update') self.skipWaiting()
 })
 
+// a reminder's notification: to an open Gooseboard (sent to its board), or a new window there
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close()
+  const url = e.notification.data?.url
+  if (typeof url !== 'string') return
+  e.waitUntil(
+    (async () => {
+      const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      const win = wins.find((w) => w.focused) ?? wins[0]
+      if (!win) return self.clients.openWindow(url)
+      win.postMessage({ t: 'gooseboard-open', url })
+      return win.focus()
+    })(),
+  )
+})
+
 self.addEventListener('fetch', (e) => {
   const req = e.request
   const url = new URL(req.url)
