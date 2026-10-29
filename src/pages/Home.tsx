@@ -163,7 +163,7 @@ export default function Home() {
       </section>
 
       <section>
-        <h2>Your boards</h2>
+        <h2 className={s.sectionTitle}>Your boards</h2>
         {boards.length === 0 ? (
           <p className={s.empty}>No boards yet. Create one, then send the link to anyone you want on it.</p>
         ) : (
@@ -208,7 +208,7 @@ export default function Home() {
       </section>
 
       <section className={s.profile}>
-        <h2>You</h2>
+        <h2 className={s.sectionTitle}>You</h2>
         <p>No accounts. Your name and color live in this browser and show on your cursor.</p>
         <div className={s.profileRow}>
           <span className={s.me} style={{ background: profile.color }} title="How you look to others">

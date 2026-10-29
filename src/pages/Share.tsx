@@ -50,7 +50,7 @@ export default function Share() {
       </section>
       {boards.length > 0 && (
         <section>
-          <h2>Your boards</h2>
+          <h2 className={s.sectionTitle}>Your boards</h2>
           <ul className={s.list}>
             {boards.map((b) => (
               <li key={b.id}>

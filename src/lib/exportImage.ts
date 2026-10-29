@@ -174,8 +174,8 @@ const NOTE_CSS = `
 .prose { flex: 1; min-height: 0; overflow: hidden; padding: 12px 14px; line-height: 1.4; word-break: break-word; }
 .prose p { margin: 0 0 0.45em; }
 .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 { margin: 0.1em 0 0.35em; line-height: 1.2; }
-.prose h1 { font-size: 2em; } .prose h2 { font-size: 1.6em; } .prose h3 { font-size: 1.3em; }
-.prose h4 { font-size: 1.12em; } .prose h5 { font-size: 1em; } .prose h6 { font-size: 0.88em; }
+.prose h1 { font-size: 2.5em; } .prose h2 { font-size: 2em; } .prose h3 { font-size: 1.75em; }
+.prose h4 { font-size: 1.5em; } .prose h5 { font-size: 1.25em; } .prose h6 { font-size: 1.1em; }
 .prose ul, .prose ol { margin: 0 0 0.45em; padding-left: 1.3em; }
 .prose ul[data-type='taskList'] { list-style: none; padding-left: 0.2em; }
 .prose ul[data-type='taskList'] > li { display: flex; gap: 0.5em; align-items: flex-start; }
