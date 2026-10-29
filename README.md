@@ -64,7 +64,7 @@ A simple collaborative decentralized workspace for notes, drawings, files, and f
 
 ## Develop
     npm install
-    npm run dev          # http://localhost:5173
+    npm run dev # http://localhost:5173
     npm run lint && npm run typecheck && npm run build
 
 Built with Vite, React 18, TypeScript, Yjs + y-webrtc, Tiptap, perfect-freehand, and transformers.js.
