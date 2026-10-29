@@ -8,6 +8,7 @@ import { P2P } from './p2p'
 import { PartialCache } from './partial'
 import { joinPresence, type PresenceHandle } from './presence'
 import { LocalSources } from './sources'
+import { gcPreviews } from './previewCache'
 import { gcThumbs } from './thumbCache'
 import { FileSync } from './sync'
 import { TransferStore } from './transfers'
@@ -71,6 +72,7 @@ function create(id: string): Session {
     const folders = new Set(all.flatMap((it) => (it.type === 'folder' && it.key ? [it.key] : [])))
     void sources.gcKept(id, new Set(all.flatMap((it) => (it.type === 'file' && it.owner === profile.id ? [it.key] : []))))
     void gcThumbs(id, new Set(all.flatMap((it) => ((it.type === 'file' || it.type === 'folder') && it.owner === profile.id && it.key ? [it.key] : []))))
+    void gcPreviews(id, new Set(all.flatMap((it) => (it.type === 'file' ? [`preview\0${it.owner}\0${it.key}`] : []))))
     void mirror.gc(id, (e) => hashes.has(e.hash) || e.aliases.some((a) => folders.has(a.slice(0, a.indexOf('/')))))
   })
   const presence = joinPresence(id, profile, () => store.name)

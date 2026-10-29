@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ROOM_PREFIX } from '../config'
 import { newBoardId, parseBoardRef } from '../lib/ids'
+import { gcPreviews } from '../net/previewCache'
 import { forgetBoard, getBoards, getProfile, renameBoardLocal, renameBoardPending, saveProfile, touchBoard, USER_COLORS, type BoardEntry } from '../lib/storage'
 import type { PresenceUser } from '../model/types'
 import { watchPresence } from '../net/presence'
@@ -100,6 +101,7 @@ export default function Home() {
     })
     if (!ok) return
     forgetBoard(b.id)
+    void gcPreviews(b.id, new Set())
     try {
       indexedDB.deleteDatabase(ROOM_PREFIX + b.id)
     } catch {

@@ -82,7 +82,7 @@ function saveBlob(blob: Blob, name: string) {
 
 /** User-facing operations on remote files: thumbnails, directory listings, previews, downloads. */
 export class FileService {
-  private previews = new PreviewCache()
+  private previews: PreviewCache
   private shared = new Map<string, Shared>()
 
   constructor(
@@ -93,6 +93,7 @@ export class FileService {
     private board: string,
     private partial: PartialCache,
   ) {
+    this.previews = new PreviewCache(board)
     // downloads a reload or close cut off: offered again, to resume with a click (it ends in a save prompt)
     void partial.ready.then(() => {
       for (const e of partial.list()) if (e.want === 'download' && e.src && e.boards.includes(board)) this.offerResume(e.hash, `resume:${e.hash}`, e.canceledBy && `Canceled by ${e.canceledBy}`)
@@ -354,6 +355,7 @@ export class FileService {
         return b.size > PREVIEW_BYTES ? ((await makePreview(b)) ?? b) : b
       },
       true,
+      hash,
     )
   }
 
