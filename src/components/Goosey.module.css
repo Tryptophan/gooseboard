@@ -103,14 +103,38 @@
   flex: 1; min-width: 0; width: 100%; box-sizing: border-box; resize: none; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border);
   background: var(--bg); color: var(--text); font: inherit; font-size: 14px; line-height: 1.35; max-height: 120px;
 }
-/* the dictation mic, beside the message box */
+/* the voice-note mic, beside the message box */
 .mic { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--muted); cursor: pointer; }
 .mic:hover:not(:disabled) { color: var(--text); background: var(--hover); }
 .mic:disabled { opacity: 0.4; cursor: default; }
 .typing .install { height: 34px; }
 .typing .install:disabled { opacity: 0.45; cursor: default; }
-.mic.micOn { background: var(--danger); border-color: var(--danger); color: #fff; }
-.mic.micHeard { box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 35%, transparent); }
+.mic.micOn, .mic.micOn:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* --- voice notes: a play button, the waveform (played bars filled in), and the time --- */
+.voice { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.text.voiceText { width: 240px; max-width: 100%; box-sizing: border-box; padding: 6px 10px 6px 6px; }
+.play {
+  flex: none; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%;
+  background: var(--accent); color: #fff; cursor: pointer;
+}
+.mine .play { background: #fff; color: var(--accent); }
+.play:disabled { opacity: 0.45; cursor: default; }
+.wave { flex: 1; min-width: 0; height: 24px; display: flex; align-items: center; gap: 2px; cursor: pointer; }
+.wave i { flex: 1; min-width: 1px; border-radius: 1px; background: currentColor; opacity: 0.35; }
+.wave i.played { opacity: 1; }
+.dur { flex: none; min-width: 30px; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; opacity: 0.85; }
+/* in the composer: recording, or heard back before sending */
+.strip { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.strip .voice { height: 34px; padding: 0 8px 0 2px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.strip .play { width: 26px; height: 26px; }
+.discard { flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.discard:hover { color: var(--danger); background: var(--hover); }
+.voice.recording { padding-left: 10px; }
+.recording .wave { cursor: default; }
+.recording .wave i { background: var(--danger); }
+.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); animation: blink 1.2s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: 0.25; } }
 
 /* unread chat: a count on his right shoulder */
 .unread {
@@ -128,7 +152,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hop .art, .bubble { animation: none; }
+  .hop .art, .bubble, .dot { animation: none; }
   .head { transition: none; }
 }
 

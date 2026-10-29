@@ -1,4 +1,5 @@
 import { BoardStore } from '../model/board'
+import { voiceFiles } from '../model/chat'
 import { diagSecrets, diagSection, tag } from '../lib/diag'
 import { getBoards, getProfile, type Profile } from '../lib/storage'
 import { FileService } from './fileService'
@@ -7,6 +8,7 @@ import { P2P } from './p2p'
 import { PartialCache } from './partial'
 import { joinPresence, type PresenceHandle } from './presence'
 import { LocalSources } from './sources'
+import { gcThumbs } from './thumbCache'
 import { FileSync } from './sync'
 import { TransferStore } from './transfers'
 
@@ -65,9 +67,10 @@ function create(id: string): Session {
     // by edits: peers will fill it in, so keep every copy
     if (!all.length) return
     // the undo history died with the last visit: drop copies of files this board no longer has
-    const hashes = new Set(all.flatMap((it) => (it.type === 'file' && it.hash ? [it.hash] : [])))
+    const hashes = new Set(all.flatMap((it) => (it.type === 'file' && it.hash ? [it.hash] : [])).concat(voiceFiles(store).map((v) => v.hash!)))
     const folders = new Set(all.flatMap((it) => (it.type === 'folder' && it.key ? [it.key] : [])))
     void sources.gcKept(id, new Set(all.flatMap((it) => (it.type === 'file' && it.owner === profile.id ? [it.key] : []))))
+    void gcThumbs(id, new Set(all.flatMap((it) => ((it.type === 'file' || it.type === 'folder') && it.owner === profile.id && it.key ? [it.key] : []))))
     void mirror.gc(id, (e) => hashes.has(e.hash) || e.aliases.some((a) => folders.has(a.slice(0, a.indexOf('/')))))
   })
   const presence = joinPresence(id, profile, () => store.name)

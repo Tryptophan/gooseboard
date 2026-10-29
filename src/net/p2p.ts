@@ -7,6 +7,7 @@ import type { Mirror } from './mirror'
 import type { PartialCache } from './partial'
 import { dropIfStuck, fixGlare } from './signal/glare'
 import type { LocalSources } from './sources'
+import { Gone, Lanes, loadThumb, saveThumb, thumbKey } from './thumbCache'
 import { makePreview, makeThumb } from './thumbs'
 import type { TransferStore } from './transfers'
 
@@ -169,6 +170,8 @@ export class P2P {
   private pending = new Map<string, PendingRelink>()
   private thumbCache = new Map<string, Blob | null>()
   private previewCache = new Map<string, Promise<Blob | null>>()
+  /** thumbnails and previews being made, two at a time: each decodes a picture or opens a video */
+  private making = new Lanes(2)
   /** stream transfer id -> ranges of it being served right now */
   private streamsOut = new Map<string, number>()
   /** stream transfers this person canceled: further ranges of them are refused */
@@ -309,6 +312,8 @@ export class P2P {
 
   // ---- link management ----
   private tick = () => {
+    // thumbnails waiting for peers who have left
+    this.making.sweep()
     const room = (this.provider as any).room
     const conns: Map<string, any> | undefined = room?.webrtcConns
     let changed = false
@@ -469,6 +474,7 @@ export class P2P {
           const st = this.serving.get(`${link.peerId}:${msg.id}`)
           if (st) st.cancelled = true
           this.waiting = this.waiting.filter((w) => !(w.link === link && w.id === msg.id))
+          this.making.sweep()
         }
         break
       case 'meta':
@@ -551,7 +557,7 @@ export class P2P {
 
   private async runLocal(ar: ActiveReq): Promise<void> {
     try {
-      const r = await this.resolve(ar.req)
+      const r = await this.resolve(ar.req, () => ar.settled)
       if (!r || r === 'relink') throw new Error(r ? 'needs relink' : 'not found')
       ar.meta = { name: r.name, size: r.size, mime: r.mime }
       ar.h.onMeta?.(ar.meta)
@@ -592,20 +598,21 @@ export class P2P {
   }
 
   // ---- serving (this peer owns the bytes) ----
-  private async resolve(req: GetReq): Promise<Resolved | 'relink' | null> {
+  /** `gone`: the asker canceled or left, so a thumbnail or preview still waiting its turn needn't be made. */
+  private async resolve(req: GetReq, gone: () => boolean): Promise<Resolved | 'relink' | null> {
     const miss = () => (this.lookup(req.key) ? ('relink' as const) : null)
     if ((req.op === 'file' || req.op === 'preview') && req.hash) {
       let b = await this.mirror.get(req.hash, this.board)
       let e: { name: string; mime: string } | undefined = this.mirror.entry(req.hash)
       if (!b) ({ blob: b, e } = (await this.partial.servable(req.hash, this.board)) ?? { blob: null, e: undefined })
-      if (b && e && req.op === 'preview') return this.resolvePreview(req.hash, b, e.name)
+      if (b && e && req.op === 'preview') return this.resolvePreview(req.hash, b, e.name, gone)
       const blob = b
       if (blob && e) return { name: e.name, size: blob.size, mime: e.mime, mirror: true, read: (a, c) => blob.slice(a, c).arrayBuffer() }
     }
     if (req.kind === 'file') {
       const f = await this.sources.getFile(req.key)
       if (!f) return miss()
-      return this.resolveFile(req, f)
+      return this.resolveFile(req, f, gone)
     }
     const dir = await this.sources.getDir(req.key)
     if (!dir) return miss()
@@ -619,34 +626,45 @@ export class P2P {
     } catch {
       return null
     }
-    return this.resolveFile(req, f)
+    return this.resolveFile(req, f, gone)
   }
 
-  private async resolveFile(req: GetReq, f: File): Promise<Resolved | null> {
+  private async resolveFile(req: GetReq, f: File, gone: () => boolean): Promise<Resolved | null> {
     if (req.op === 'thumb') {
-      const ck = `${req.key}\0${req.path ?? ''}`
+      const ck = thumbKey(req.key, req.path ?? '', f)
       let t = this.thumbCache.get(ck)
+      if (t === undefined) t = await loadThumb(ck)
       if (t === undefined) {
-        t = await makeThumb(f)
-        this.thumbCache.set(ck, t)
-        if (this.thumbCache.size > 300) this.thumbCache.delete(this.thumbCache.keys().next().value!)
+        t = await this.making.run(() => makeThumb(f), gone)
+        saveThumb(ck, t, this.board)
       }
+      this.thumbCache.set(ck, t)
+      if (this.thumbCache.size > 300) this.thumbCache.delete(this.thumbCache.keys().next().value!)
       if (!t) return null
       const blob = t
       return { name: 'thumb.jpg', size: blob.size, mime: 'image/jpeg', read: (a, b) => blob.slice(a, b).arrayBuffer() }
     }
-    if (req.op === 'preview') return this.resolvePreview(`${req.key}\0${req.path ?? ''}`, f, f.name)
+    if (req.op === 'preview') return this.resolvePreview(`${req.key}\0${req.path ?? ''}`, f, f.name, gone)
     return { name: f.name, size: f.size, mime: mimeOf(f.name, f.type), read: (a, b) => f.slice(a, b).arrayBuffer() }
   }
 
-  private async resolvePreview(ck: string, src: Blob, name: string): Promise<Resolved | null> {
+  private async resolvePreview(ck: string, src: Blob, name: string, gone: () => boolean): Promise<Resolved | null> {
     let p = this.previewCache.get(ck)
     if (!p) {
-      p = makePreview(src, name)
+      p = this.making.run(() => makePreview(src, name), gone)
       this.previewCache.set(ck, p)
+      // skipped, its asker gone: made afresh for the next one
+      p.catch(() => this.previewCache.get(ck) === p && this.previewCache.delete(ck))
       if (this.previewCache.size > 60) this.previewCache.delete(this.previewCache.keys().next().value!)
     }
-    const blob = await p
+    let blob: Blob | null
+    try {
+      blob = await p
+    } catch (e) {
+      // another asker's turn, skipped when they left: this one still wants it
+      if (e instanceof Gone && !gone()) return this.resolvePreview(ck, src, name, gone)
+      throw e
+    }
     if (!blob) return null
     return { name: 'preview', size: blob.size, mime: blob.type, read: (a, b) => blob.slice(a, b).arrayBuffer() }
   }
@@ -685,7 +703,7 @@ export class P2P {
     let fromMirror = false
     const send = (m: Wire) => this.sendFrame(link, encodeJSON(m))
     try {
-      const r = await this.resolve(req)
+      const r = await this.resolve(req, () => st.cancelled || !link.conn.connected || !!link.conn.closed)
       if (r === 'relink') return void (await this.needRelink(link, id, req, sent))
       if (!r) return void (await send({ t: 'err', id, code: 'notfound' }))
       fromMirror = !!r.mirror
@@ -737,6 +755,8 @@ export class P2P {
       }
     } catch (e) {
       const name = (e as Error)?.name
+      // the asker canceled while it waited its turn: nobody to answer
+      if (e instanceof Gone) return
       if ((name === 'NotFoundError' || name === 'NotReadableError') && !st.cancelled && !fromMirror) {
         // file moved/changed since it was shared: ask the owner to relink and resume from `sent`
         this.sources.forget(req.key)

@@ -11,6 +11,7 @@ import type { ThemePref } from '../lib/storage'
 import { toast } from '../lib/toast'
 import { useCoarse } from '../lib/touch'
 import { useInstallWay } from '../net/pwa'
+import { clearThumbs, thumbStats } from '../net/thumbCache'
 import { getGoosey, leaveMenuEntry, openMenu, subscribeGoosey, type Tab } from '../state/goosey'
 import { useSession } from '../state/session'
 import { useUi, useUiDispatch } from '../state/ui'
@@ -349,10 +350,12 @@ function Storage() {
   useSyncExternalStore(partial.subscribe, partial.getVersion)
   const [usage, setUsage] = useState<number | null>(null)
   const [models, setModels] = useState<number | null>(null)
+  const [thumbs, setThumbs] = useState<{ count: number; bytes: number } | null>(null)
   const refresh = async () => {
     const est = await navigator.storage?.estimate?.().catch(() => null)
     setUsage(est?.usage ?? null)
     setModels(await cachedModelBytes())
+    setThumbs(await thumbStats())
   }
   useEffect(() => {
     void refresh()
@@ -376,6 +379,10 @@ function Storage() {
   const clearPieces = async () => {
     if (!(await confirmDialog({ title: 'Clear the transfer cache?', message: 'Pieces of files fetched from other people (streamed videos, and downloads and syncs not yet finished) are removed. Synced files stay. Unfinished transfers start over.', ok: 'Clear', danger: true }))) return
     await partial.clear()
+    void refresh()
+  }
+  const clearThumbnails = async () => {
+    await clearThumbs()
     void refresh()
   }
 
@@ -402,6 +409,13 @@ function Storage() {
           <span>Transfer cache</span>
           <span className={c.muted}>{pieces.count ? `${pieces.count} · ${formatSize(pieces.bytes)}` : 'none'}</span>
           <button title="Clear the transfer cache" disabled={!pieces.count} onClick={() => void clearPieces()}>
+            <Icon name="trash" size={13} />
+          </button>
+        </li>
+        <li title="Thumbnails of the pictures and videos you share, made once so people can browse your folders quickly">
+          <span>Thumbnails</span>
+          <span className={c.muted}>{thumbs === null ? '…' : thumbs.count ? `${thumbs.count} · ${formatSize(thumbs.bytes)}` : 'none'}</span>
+          <button title="Clear the thumbnails (they're made again when needed)" disabled={!thumbs?.count} onClick={() => void clearThumbnails()}>
             <Icon name="trash" size={13} />
           </button>
         </li>

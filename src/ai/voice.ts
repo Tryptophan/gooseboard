@@ -60,8 +60,7 @@ function clean(text: string): string {
   return t.replace(/\b(\S+)(?:\s+\1\b){3,}/gi, '$1')
 }
 
-/** `chat`: dictating into Goosey's chat box rather than a note (`note` is then '') */
-export type VoiceState = { phase: 'idle' } | { phase: 'starting'; chat: boolean } | { phase: 'listening'; speaking: boolean; note: string; chat: boolean }
+export type VoiceState = { phase: 'idle' } | { phase: 'starting' } | { phase: 'listening'; speaking: boolean; note: string }
 
 /** One press of the mic, from start to the last utterance written. */
 interface Recording {
@@ -70,8 +69,6 @@ interface Recording {
   note: string
   /** writing into a note that was already there: it stays even if nothing is heard */
   existing: boolean
-  /** dictation: each utterance goes here instead of into a note */
-  sink?: (text: string) => void
   vad: MicVAD | null
   /** detected from the first utterance long enough to tell, then kept */
   language: string
@@ -120,10 +117,10 @@ class Voice {
    * Starts listening into `into` (an existing note), or else a new note at `at` (or inside
    * `parent`). Loads the model if it isn't yet.
    */
-  async start(store: BoardStore, at: Vec, parent: string | null, into?: string, sink?: (text: string) => void) {
+  async start(store: BoardStore, at: Vec, parent: string | null, into?: string) {
     if (this.state.phase !== 'idle') return
     const seq = ++this.seq
-    this.set({ phase: 'starting', chat: !!sink })
+    this.set({ phase: 'starting' })
     const t0 = performance.now()
     let rec: Recording
     try {
@@ -132,7 +129,7 @@ class Voice {
       await engine.load(spec)
       const { MicVAD } = await import('@ricky0123/vad-web')
       if (seq !== this.seq) return
-      rec = { store, spec, note: '', existing: false, sink, vad: null, language: 'auto', wrote: 0, queue: Promise.resolve(), pending: 0, live: true, frames: 0, peak: 0, beat: performance.now() }
+      rec = { store, spec, note: '', existing: false, vad: null, language: 'auto', wrote: 0, queue: Promise.resolve(), pending: 0, live: true, frames: 0, peak: 0, beat: performance.now() }
       rec.vad = await MicVAD.new({
         ...VAD_OPTIONS,
         getStream: () => micStream('voice'),
@@ -169,9 +166,7 @@ class Voice {
       toast(denied ? 'Gooseboard needs the microphone for voice notes' : `Couldn’t start the microphone: ${e instanceof Error ? e.message : String(e)}`)
       return
     }
-    if (sink) {
-      // dictation has no note: its "waiting" dots are keyed by ''
-    } else if (into && store.getSnapshot().all.get(into)?.type === 'note') {
+    if (into && store.getSnapshot().all.get(into)?.type === 'note') {
       rec.note = into
       rec.existing = true
     } else {
@@ -182,12 +177,7 @@ class Voice {
       store.undo.stopCapturing()
     }
     this.rec = rec
-    this.set({ phase: 'listening', speaking: false, note: rec.note, chat: !!sink })
-  }
-
-  /** Dictation: listens, and hands each utterance to `sink` as it's transcribed. */
-  dictate(store: BoardStore, sink: (text: string) => void) {
-    return this.start(store, { x: 0, y: 0 }, null, undefined, sink)
+    this.set({ phase: 'listening', speaking: false, note: rec.note })
   }
 
   /** Stops the mic. What's already been heard still gets written; a note left empty is removed. */
@@ -203,7 +193,7 @@ class Voice {
     await rec.vad?.pause().catch(() => {})
     void rec.vad?.destroy().catch(() => {})
     await rec.queue
-    if (!rec.sink && !rec.wrote && !rec.existing && rec.store.getSnapshot().all.has(rec.note)) {
+    if (!rec.wrote && !rec.existing && rec.store.getSnapshot().all.has(rec.note)) {
       rec.store.undo.stopCapturing()
       rec.store.remove([rec.note])
     }
@@ -228,7 +218,7 @@ class Voice {
 
   private async hear(rec: Recording, audio: Float32Array) {
     // the note was deleted (or undone) meanwhile: nothing to write into
-    if (!rec.sink && !rec.store.getSnapshot().all.has(rec.note)) {
+    if (!rec.store.getSnapshot().all.has(rec.note)) {
       if (rec === this.rec) void this.stop()
       return
     }
@@ -245,10 +235,7 @@ class Voice {
       return
     }
     if (!text) return
-    if (rec.sink) {
-      rec.sink(text)
-      rec.wrote++
-    } else this.append(rec, text)
+    this.append(rec, text)
   }
 
   private append(rec: Recording, text: string) {

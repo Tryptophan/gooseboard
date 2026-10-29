@@ -3,6 +3,7 @@ import { getAutoSyncMax, subscribeAutoSync } from '../lib/autoSync'
 import { hashBlob } from '../lib/hash'
 import type { Profile } from '../lib/storage'
 import type { BoardStore } from '../model/board'
+import { voiceFiles } from '../model/chat'
 import type { FileItem } from '../model/types'
 import type { FileService } from './fileService'
 import type { Mirror } from './mirror'
@@ -42,6 +43,7 @@ type Listener = () => void
  * unsynced until someone downloads one or syncs it by hand (syncNow). Bytes go through the
  * transfer cache (PartialCache), so a sync cut off by a reload carries on when the board opens
  * again, and a file already there in full (say, a video watched to the end) syncs without the network.
+ * Voice notes in the chat sync too, always: they're small, and listening to one shouldn't wait.
  */
 export class FileSync {
   private active = new Map<string, Active>()
@@ -71,7 +73,8 @@ export class FileSync {
     void partial.ready.then(s)
     let held = partial.heldVersion
     const onHeld = () => held !== partial.heldVersion && ((held = partial.heldVersion), s())
-    this.unsubs = [store.subscribe(s), p2p.subscribe(s), mirror.subscribe(s), sources.subscribe(s), subscribeAutoSync(s), partial.subscribe(onHeld)]
+    store.chat.observe(s)
+    this.unsubs = [store.subscribe(s), () => store.chat.unobserve(s), p2p.subscribe(s), mirror.subscribe(s), sources.subscribe(s), subscribeAutoSync(s), partial.subscribe(onHeld)]
     this.retry = setInterval(s, RETRY_MS)
     store.onLoaded(s)
   }
@@ -140,11 +143,14 @@ export class FileSync {
     this.timer = null
     if (!this.store.loaded) return
     const board = this.store.id
-    const files = [...this.store.getSnapshot().all.values()].filter((i): i is FileItem => i.type === 'file')
+    const voice = voiceFiles(this.store)
+    const files = [...this.store.getSnapshot().all.values()].filter((i): i is FileItem => i.type === 'file').concat(voice)
+    const voiced = new Set(voice.map((v) => v.hash))
     const wanted = new Set<string>()
     for (const it of files) {
       const mine = it.owner === this.self.id
-      if (mine) {
+      // a voice note is hashed and kept as it's sent
+      if (mine && !voiced.has(it.hash)) {
         // hash what I share (metadata went out first), and keep my small files servable after reloads
         const need = !it.hash || (it.size <= SMALL_FILE && !this.mirror.has(it.hash))
         if (need && this.sources.isReady(it.key)) this.hashOwn(it)
@@ -156,7 +162,7 @@ export class FileSync {
         continue
       }
       const pe = this.partial.entry(it.hash)
-      const asked = this.manual.has(it.hash) || pe?.want === 'sync'
+      const asked = this.manual.has(it.hash) || pe?.want === 'sync' || voiced.has(it.hash)
       if (mine || (it.size > getAutoSyncMax() && !asked) || this.active.has(it.hash) || this.active.size >= CONCURRENCY) continue
       // the sender canceled it: it waits for Resume (syncNow)
       if (pe?.canceledBy && !this.manual.has(it.hash)) continue

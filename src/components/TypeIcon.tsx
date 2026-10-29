@@ -15,3 +15,22 @@ export function TypeIcon({ name, mime, size = 56 }: { name: string; mime?: strin
     </svg>
   )
 }
+
+/** In place of a video's missing thumbnail (rather than a blank box): a dark frame, a play mark, and the format. */
+export function VideoPoster({ name, play = true }: { name: string; play?: boolean }) {
+  const ext = (extOf(name) || 'video').slice(0, 4).toUpperCase()
+  return (
+    <div
+      aria-hidden
+      style={{ position: 'relative', width: '100%', height: '100%', display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg, #2c3350, #12151f)', color: '#fff' }}
+    >
+      {play && (
+        <svg width="34" height="34" viewBox="0 0 34 34">
+          <circle cx="17" cy="17" r="16" fill="rgba(255,255,255,0.16)" />
+          <path d="M13.5 10.5v13l10.5-6.5z" fill="#fff" />
+        </svg>
+      )}
+      <span style={{ position: 'absolute', left: 8, bottom: 6, font: '700 10px system-ui, sans-serif', letterSpacing: '0.06em', opacity: 0.7 }}>{ext}</span>
+    </div>
+  )
+}

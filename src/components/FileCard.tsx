@@ -9,7 +9,7 @@ import { thumbSize } from '../net/thumbs'
 import { useFileSync, useSession, usePeers, useSourcesVersion } from '../state/session'
 import { Icon } from './Icons'
 import { canPreview, usePreview } from './Preview'
-import { TypeIcon } from './TypeIcon'
+import { TypeIcon, VideoPoster } from './TypeIcon'
 import s from './Items.module.css'
 
 export const safeThumb = (t?: string) => (t && t.startsWith('data:image/') ? t : undefined)
@@ -54,7 +54,7 @@ export function FileBody({ item }: { item: FileItem }) {
   return (
     <div className={`${s.card} ${s.file} ${blocked ? s.pinned : ''}`}>
       <div className={s.thumb}>
-        {thumb ? <img src={thumb} alt="" draggable={false} /> : <TypeIcon name={item.name} mime={item.mime} />}
+        {thumb ? <img src={thumb} alt="" draggable={false} /> : kind === 'video' ? <VideoPoster name={item.name} /> : <TypeIcon name={item.name} mime={item.mime} />}
         {/* a drawn triangle: the ▶ glyph sits off-centre and turns into an emoji on some platforms */}
         {kind === 'video' && thumb && (
           <span className={s.play}>

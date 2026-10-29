@@ -44,7 +44,34 @@ async function decodeImage<T>(file: Blob, draw: (img: HTMLImageElement, w: numbe
   }
 }
 
-const imageThumb = (file: Blob, maxDim: number) => decodeImage(file, (img, w, h) => canvasToBlob(drawScaled(img, w, h, maxDim), 0.72))
+/** below this, decoding in full costs little, and a small picture isn't blown up first */
+const SMALL_IMAGE = 1024 * 1024
+
+/**
+ * A big image decoded straight to about `maxDim` wide (the browser can shrink as it decodes, rather
+ * than unpacking all 24 megapixels of a photo first), then fitted inside `maxDim`; null where that
+ * isn't possible (SVG, Safari's older createImageBitmap), to decode it the usual way.
+ */
+async function decodeSmall(file: Blob, maxDim: number): Promise<HTMLCanvasElement | null> {
+  if (file.size < SMALL_IMAGE || typeof createImageBitmap !== 'function') return null
+  let bmp: ImageBitmap
+  try {
+    bmp = await withTimeout(createImageBitmap(file, { resizeWidth: maxDim, resizeQuality: 'high' }), 10000)
+  } catch {
+    return null
+  }
+  try {
+    return drawScaled(bmp, bmp.width, bmp.height, maxDim)
+  } finally {
+    bmp.close()
+  }
+}
+
+async function imageThumb(file: Blob, maxDim: number) {
+  const small = await decodeSmall(file, maxDim)
+  if (small) return canvasToBlob(small, 0.72)
+  return decodeImage(file, (img, w, h) => canvasToBlob(drawScaled(img, w, h, maxDim), 0.72))
+}
 
 const isImageFile = (file: { type: string; name?: string }) => file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(file.name ?? '')
 /** formats that can be see-through: their previews keep the alpha channel */
@@ -126,6 +153,11 @@ export async function thumbSize(thumb: string): Promise<{ w: number; h: number }
 export async function makePreview(file: Blob, name = ''): Promise<Blob | null> {
   const f = { type: file.type, name }
   try {
+    // see-through pictures keep the usual path, whose canvas isn't filled white
+    if (!mayHaveAlpha(f)) {
+      const small = await decodeSmall(file, PREVIEW_DIM)
+      if (small) return await canvasToBlob(small, 0.85)
+    }
     return await decodeImage(file, async (img, w, h) => {
       const alpha = mayHaveAlpha(f)
       // Safari can't encode WebP and hands back a PNG, which is fine
@@ -136,15 +168,32 @@ export async function makePreview(file: Blob, name = ''): Promise<Blob | null> {
   }
 }
 
+/** past this, loading a video for one frame is slow and heavy: it shows the video placeholder instead */
+const HUGE_VIDEO = 2 * 1024 ** 3
+
 async function videoThumb(file: File, maxDim: number): Promise<Blob | null> {
+  if (file.size > HUGE_VIDEO) return null
   return withVideo(file, async (v) => {
     await new Promise<void>((res) => {
       v.onseeked = () => res()
       v.currentTime = Math.min(1, (v.duration || 2) * 0.1)
     })
     await frameReady(v)
-    return canvasToBlob(drawScaled(v, v.videoWidth || 320, v.videoHeight || 180, maxDim), 0.72)
+    const c = drawScaled(v, v.videoWidth || 320, v.videoHeight || 180, maxDim, false)
+    // no frame was ever drawn (an unsupported codec, or one never presented off-screen): not a white box
+    if (blank(c)) return null
+    return canvasToBlob(c, 0.72)
   })
+}
+
+/** True when a canvas is one flat colour, or nothing at all, sampled on a grid. */
+function blank(c: HTMLCanvasElement): boolean {
+  const { data } = c.getContext('2d')!.getImageData(0, 0, c.width, c.height)
+  const step = Math.max(4, Math.floor(data.length / 4 / 400)) * 4
+  for (let i = step; i < data.length; i += step) {
+    if (data[i + 3] && Math.abs(data[i] - data[0]) + Math.abs(data[i + 1] - data[1]) + Math.abs(data[i + 2] - data[2]) > 24) return false
+  }
+  return true
 }
 
 /** Small JPEG preview for images and videos; null for everything else (UI shows a type icon). */

@@ -19,8 +19,11 @@ import { promptDialog } from './Dialog'
 import { safeThumb } from './FileCard'
 import { Icon } from './Icons'
 import { canPreview, usePreview } from './Preview'
-import { TypeIcon } from './TypeIcon'
+import { TypeIcon, VideoPoster } from './TypeIcon'
 import s from './FolderPanel.module.css'
+
+/** how long an entry stays in view before its thumbnail is asked for */
+const THUMB_DWELL_MS = 150
 
 export function FolderPanel() {
   const ui = useUi()
@@ -401,7 +404,11 @@ function Child({ item, selected, dropOn, onSelect, drag, onOpenFolder, onOut, on
     title = item.title || 'Note'
   } else if (item.type === 'file') {
     const t = safeThumb(item.thumb)
-    body = <div className={s.thumb}>{t ? <img src={t} alt="" draggable={false} /> : <TypeIcon name={item.name} mime={item.mime} size={44} />}</div>
+    body = (
+      <div className={s.thumb}>
+        {t ? <img src={t} alt="" draggable={false} /> : kindOf(item.name, item.mime) === 'video' ? <VideoPoster name={item.name} /> : <TypeIcon name={item.name} mime={item.mime} size={44} />}
+      </div>
+    )
     title = item.name
     sub = `${formatSize(item.size)} · ${item.ownerName}`
   } else if (item.type === 'folder') {
@@ -607,19 +614,33 @@ function Entry({ folder, entry, path, selected, onSelect, drag, onOpen }: EntryP
   const isFile = entry.kind === 'file'
   const wantsThumb = isFile && (kind === 'image' || kind === 'video')
 
-  // lazily fetch thumbnails only for entries that scroll into view
+  // thumbnails only for entries that stay in view a moment (a fast scroll asks for nothing), and
+  // asked for again if one scrolls away before it arrives (the owner then needn't make it)
   useEffect(() => {
     if (!wantsThumb || !ref.current) return
-    let dead = false
-    const io = new IntersectionObserver((es) => {
-      if (es.some((x) => x.isIntersecting)) {
-        io.disconnect()
-        void files.thumbURL(folder.owner, folder.key ?? '', 'dir', path).then((u) => !dead && setThumb(u))
+    let wait: ReturnType<typeof setTimeout> | undefined
+    let ctl: AbortController | null = null
+    const io = new IntersectionObserver(([x]) => {
+      clearTimeout(wait)
+      if (!x?.isIntersecting) {
+        ctl?.abort()
+        ctl = null
+        return
       }
+      wait = setTimeout(() => {
+        const c = (ctl = new AbortController())
+        void files.thumbURL(folder.owner, folder.key ?? '', 'dir', path, c.signal).then((u) => {
+          if (c.signal.aborted) return
+          setThumb(u)
+          ctl = null
+          io.disconnect()
+        })
+      }, THUMB_DWELL_MS)
     })
     io.observe(ref.current)
     return () => {
-      dead = true
+      clearTimeout(wait)
+      ctl?.abort()
       io.disconnect()
     }
   }, [wantsThumb, files, folder.owner, folder.key, path])
@@ -665,7 +686,9 @@ function Entry({ folder, entry, path, selected, onSelect, drag, onOpen }: EntryP
           <Icon name="folder" size={28} />
         </div>
       ) : (
-        <div className={s.thumb}>{thumb ? <img src={thumb} alt="" draggable={false} /> : <TypeIcon name={entry.name} mime={entry.mime} size={44} />}</div>
+        <div className={s.thumb}>
+          {thumb ? <img src={thumb} alt="" draggable={false} /> : kind === 'video' ? <VideoPoster name={entry.name} /> : <TypeIcon name={entry.name} mime={entry.mime} size={44} />}
+        </div>
       )}
       <div className={s.childName} title={entry.name}>{entry.name}</div>
       <div className={s.childSub}>{!isFile ? 'Folder' : formatSize(entry.size)}</div>

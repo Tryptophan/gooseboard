@@ -10,7 +10,7 @@ import { useFileSync, useSession, usePeers, useSourcesVersion } from '../state/s
 import { safeThumb, SyncBadge } from './FileCard'
 import { Icon } from './Icons'
 import { PREVIEW_OPENED, usePreview } from './Preview'
-import { TypeIcon } from './TypeIcon'
+import { TypeIcon, VideoPoster } from './TypeIcon'
 import s from './Media.module.css'
 
 /** a video that can't stream is held whole in memory to play: only up to this size */
@@ -70,7 +70,7 @@ export function VideoBody({ item, selected }: { item: MediaItem; selected: boole
         <InlineVideo item={item} poster={poster} />
       ) : (
         <>
-          {poster ? <img className={s.bare} src={poster} alt="" draggable={false} /> : <div className={s.blank} />}
+          {poster ? <img className={s.bare} src={poster} alt="" draggable={false} /> : <div className={s.blank}><VideoPoster name={item.name} play={false} /></div>}
           <button className={s.bigPlay} title="Play" onClick={() => setPlaying(true)}>
             <PlayGlyph size={22} />
           </button>

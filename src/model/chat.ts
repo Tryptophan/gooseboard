@@ -2,6 +2,7 @@ import * as Y from 'yjs'
 import { newItemId } from '../lib/ids'
 import { loadChatSeen, saveChatSeen } from '../lib/storage'
 import type { BoardStore } from './board'
+import type { FileItem } from './types'
 
 /** The board's chat: a Y.Array of message maps under `chat`, kept with the board like everything else. */
 export interface ChatMessage {
@@ -11,6 +12,23 @@ export interface ChatMessage {
   /** who wrote it, as they were named then */
   from: { id: string; name: string; color: string }
   text: string
+  /** a voice note: the message is the recording, and `text` is empty */
+  voice?: VoiceClip
+}
+
+/**
+ * A recording sent in the chat. Like any shared file, the bytes stay out of the doc: the sender's
+ * browser keeps them (in its Mirror, by content hash) and serves them, and every peer copies them
+ * in, whatever their auto-sync size, so whoever holds one can pass it on.
+ */
+export interface VoiceClip {
+  hash: string
+  size: number
+  mime: string
+  /** length in ms (a recorded WebM doesn't say) */
+  dur: number
+  /** loudness through the recording, 0..100, for the waveform */
+  peaks: number[]
 }
 
 /**
@@ -42,7 +60,31 @@ export interface Recipient {
 const STEPS = 300
 
 function read(m: Y.Map<any>): ChatMessage {
-  return { id: m.get('id'), at: m.get('at') ?? 0, from: m.get('from') ?? { id: '', name: 'Someone', color: '#9aa5b1' }, text: String(m.get('text') ?? '') }
+  const voice = m.get('voice') as VoiceClip | undefined
+  return {
+    id: m.get('id'), at: m.get('at') ?? 0, from: m.get('from') ?? { id: '', name: 'Someone', color: '#9aa5b1' }, text: String(m.get('text') ?? ''),
+    ...(voice?.hash && { voice }),
+  }
+}
+
+const EXT: Record<string, string> = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3' }
+
+/** A voice note as a file, to sync and serve like one (it's never on the board). */
+export function voiceFile(m: ChatMessage & { voice: VoiceClip }): FileItem {
+  const { hash, size, mime } = m.voice
+  const day = new Date(m.at).toISOString().slice(0, 16).replace('T', ' ').replace(':', '.')
+  return {
+    id: m.id, type: 'file', x: 0, y: 0, w: 0, h: 0, rot: 0, z: 0, parent: null,
+    name: `Voice note ${day}.${EXT[mime.split(';')[0]] ?? 'webm'}`, size, mime, owner: m.from.id, ownerName: m.from.name, key: `voice:${m.id}`, hash,
+  }
+}
+
+/** Every voice note in a board's chat, as files. */
+export function voiceFiles(store: BoardStore): FileItem[] {
+  return store.chat.toArray().flatMap((y) => {
+    const m = read(y)
+    return m.voice ? [voiceFile(m as ChatMessage & { voice: VoiceClip })] : []
+  })
 }
 
 const steps = (a: unknown): [number, number][] => (a instanceof Y.Array ? a.toArray() : [])
@@ -165,8 +207,8 @@ class ChatLog {
     return 'pending'
   }
 
-  /** Sends one of this person's messages. */
-  send(text: string) {
+  /** Sends one of this person's messages: text, or a voice note already in this browser's Mirror. */
+  send(text: string, voice?: VoiceClip) {
     const { profile, chat } = this.store
     const m = new Y.Map<any>()
     this.store.doc.transact(() => {
@@ -175,6 +217,7 @@ class ChatLog {
       m.set('at', Date.now())
       m.set('from', { id: profile.id, name: profile.name, color: profile.color })
       m.set('text', text)
+      if (voice) m.set('voice', voice)
     })
   }
 }

@@ -49,13 +49,12 @@ export function MicButton() {
     return () => window.removeEventListener(MIC_EVENT, h)
   }, [])
 
-  // dictating into the chat shows there, not here
-  const live = st.phase === 'listening' && !st.chat
+  const live = st.phase === 'listening'
   const title = live ? 'Stop voice note  (M)' : 'Voice note  (M)'
   return (
     <>
       <button
-        className={`${live ? s.micLive : ''} ${live && st.speaking ? s.micHeard : ''} ${st.phase === 'starting' && !st.chat ? s.micStarting : ''}`}
+        className={`${live ? s.micLive : ''} ${live && st.speaking ? s.micHeard : ''} ${st.phase === 'starting' ? s.micStarting : ''}`}
         aria-pressed={live}
         title={title}
         onClick={() => void click()}

@@ -332,12 +332,15 @@ export class FileService {
     }
   }
 
-  /** Object URL for a thumbnail the owner generates on demand (cached for the session). */
-  thumbURL(ownerId: string, key: string, kind: 'file' | 'dir', path?: string): Promise<string | null> {
+  /**
+   * Object URL for a thumbnail the owner generates on demand (cached for the session). Aborting
+   * `signal` (it scrolled away first) cancels the request, so the owner never makes it.
+   */
+  thumbURL(ownerId: string, key: string, kind: 'file' | 'dir', path?: string, signal?: AbortSignal): Promise<string | null> {
     const ck = `${ownerId}\0${key}\0${path ?? ''}`
     let p = this.thumbs.get(ck)
     if (!p) {
-      p = this.getBlob(ownerId, { op: 'thumb', kind, key, path })
+      p = this.getBlob(ownerId, { op: 'thumb', kind, key, path }, undefined, { signal })
         .then((b) => URL.createObjectURL(b))
         .catch(() => null)
       this.thumbs.set(ck, p)
