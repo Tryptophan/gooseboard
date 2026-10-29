@@ -530,13 +530,6 @@ export function BoardSurface() {
     lastWorld.current = wp
     sendCursor(wp)
     const it = inter.current
-    if (space.current && !it && e.pointerType === 'mouse') {
-      // holding space pans with the pointer, no button needed
-      const prev = spaceAt.current
-      spaceAt.current = { x: e.clientX, y: e.clientY }
-      if (prev) camApi.panBy(e.clientX - prev.x, e.clientY - prev.y)
-      return
-    }
     if (!it || (it.kind !== 'pinch' && e.pointerId !== active.current.id)) return
     const z = camApi.camRef.current.z
 
@@ -1218,10 +1211,18 @@ export function BoardSurface() {
         setSpaceDown(false)
       }
     }
+    // holding space pans with the pointer, no button needed
+    const onSpaceMove = (e: PointerEvent) => {
+      if (!space.current || e.buttons || e.pointerType !== 'mouse') return
+      const prev = spaceAt.current
+      spaceAt.current = { x: e.clientX, y: e.clientY }
+      if (prev) camApi.panBy(e.clientX - prev.x, e.clientY - prev.y)
+    }
     const copy = (e: ClipboardEvent) => onCopy(e, false)
     const cut = (e: ClipboardEvent) => onCopy(e, true)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('pointermove', onSpaceMove)
     document.addEventListener('copy', copy)
     document.addEventListener('cut', cut)
     document.addEventListener('paste', onPaste)
@@ -1230,6 +1231,7 @@ export function BoardSurface() {
       for (const t of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'auxclick'] as const) window.removeEventListener(t, onMiddle, true)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('pointermove', onSpaceMove)
       document.removeEventListener('copy', copy)
       document.removeEventListener('cut', cut)
       document.removeEventListener('paste', onPaste)
