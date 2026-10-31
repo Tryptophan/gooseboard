@@ -6,8 +6,15 @@
   border-radius: 16px; -webkit-tap-highlight-color: transparent;
 }
 .goose:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.art { display: block; filter: drop-shadow(0 2px 6px rgba(15, 30, 70, 0.25)); }
-.art * { transform-box: view-box; }
+.art { position: relative; width: 100%; height: 100%; filter: drop-shadow(0 2px 6px rgba(15, 30, 70, 0.25)); }
+.art svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.art svg * { transform-box: view-box; }
+/* the tile's rx="14" of 64 */
+.clip { position: absolute; inset: 0; border-radius: calc(14 / 64 * 100%); overflow: hidden; }
+/* down 1.5 of the tile's 64 and back: 3.2s round, 1.4s hovered */
+.bob { will-change: transform; animation: bob 1.6s ease-in-out infinite alternate; }
+.bob.quick { animation-duration: 0.7s; }
+@keyframes bob { to { transform: translateY(calc(1.5 / 64 * 100%)); } }
 .tile { fill: #2f6df6; }
 .white { fill: #fff; }
 .beak { fill: #ffb020; }
@@ -153,7 +160,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hop .art, .bubble, .dot { animation: none; }
+  .hop .art, .bob, .bubble, .dot { animation: none; }
   .head { transition: none; }
 }
 

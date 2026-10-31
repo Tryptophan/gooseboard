@@ -159,24 +159,23 @@ const useCalm = () =>
   )
 
 /**
- * The Gooseboard logo, bigger and alive: the neck sways and glances, the eye blinks. The sway and
- * blink are SMIL, not CSS: Chrome draws an SVG element under a running CSS transform animation on
- * a layer of its own, without anti-aliasing, and the tilted neck's edge goes jagged.
+ * The Gooseboard logo, bigger and alive: the neck sways and glances, the eye blinks. The sway is a
+ * CSS transform on the neck's own <svg>, so the compositor slides it at any fraction of a pixel;
+ * SMIL moved the paths, and browsers snap path edges to quarter pixels, so the bob stepped. The
+ * blink stays SMIL: Chrome draws an SVG element (not a whole <svg>) under a running CSS transform
+ * animation on a layer of its own, without anti-aliasing, and its edge goes jagged.
  */
 function GooseyArt({ look = 0, quick = false }: { look?: number; quick?: boolean }) {
   const neck = 'M22 70V23a9 9 0 0 1 9-9c4 0 7 2 9 4l1 .5V28.5L40 29v41z'
   const still = useCalm()
   return (
-    <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden className={s.art}>
-      <defs>
-        <clipPath id="goosey-tile">
-          <rect width="64" height="64" rx="14" />
-        </clipPath>
-      </defs>
-      <rect width="64" height="64" rx="14" className={s.tile} />
-      <g clipPath="url(#goosey-tile)">
-        <g>
-          {!still && <animateTransform attributeName="transform" type="translate" values="0 0; 0 1.5; 0 0" keyTimes="0; 0.5; 1" calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1" dur={quick ? '1.4s' : '3.2s'} repeatCount="indefinite" />}
+    <div aria-hidden className={s.art}>
+      <svg viewBox="0 0 64 64">
+        <rect width="64" height="64" rx="14" className={s.tile} />
+      </svg>
+      {/* the tile's rounded edge clips the neck */}
+      <div className={s.clip}>
+        <svg viewBox="0 0 64 64" overflow="visible" className={`${s.bob} ${quick ? s.quick : ''}`}>
           <g className={s.head} style={{ rotate: `${look}deg` }}>
             <path d={neck} className={s.white} />
             <path d="M40 18l11 5.5c1 .5 1 1.5 0 2L40 29z" className={s.beak} />
@@ -184,9 +183,9 @@ function GooseyArt({ look = 0, quick = false }: { look?: number; quick?: boolean
               {!still && <animate attributeName="ry" values="2.2; 2.2; 0.22; 2.2" keyTimes="0; 0.94; 0.96; 1" dur="5.5s" repeatCount="indefinite" />}
             </ellipse>
           </g>
-        </g>
-      </g>
-    </svg>
+        </svg>
+      </div>
+    </div>
   )
 }
 
