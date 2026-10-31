@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 const P: Record<string, ReactNode> = {
-  select: <path d="M5 3l14 8-6 2-3 6z" />,
+  select: <path d="M5 4l14 8-6 2-3 6z" />,
   hand: <path d="M8 13V5.5a1.5 1.5 0 013 0V11m0-6.5a1.5 1.5 0 013 0V11m0-4.5a1.5 1.5 0 013 0V13m0-3.5a1.5 1.5 0 013 0V15a6 6 0 01-6 6h-1.5a6 6 0 01-4.7-2.3L4 14.5a1.6 1.6 0 012.4-2L8 14" />,
   pen: <path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 013 3L8 19zM14.5 6.5l3 3" />,
   eraser: <path d="M8 20h12M5.5 14.5l8-8a2 2 0 013 0l2 2a2 2 0 010 3l-7 7H8.5a2 2 0 01-1.4-.6l-1.6-1.6a2 2 0 010-2.8z" />,
